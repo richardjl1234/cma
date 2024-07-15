@@ -1,0 +1,28 @@
+---------- kugou -----------------
+------ sql query result shape --------
+(2593, 14)
+time cost:  31.54658842086792
+------ sql query result first 10 rows --------
+time cost:  0.9284679889678955
+ ----- the total count in the table ------
+      count
+0  57907658
+time cost:  10.12421202659607
+---------- qqmusicv2 -----------------
+------ sql query result shape --------
+(2924, 10)
+time cost:  411.6647653579712
+------ sql query result first 10 rows --------
+time cost:  0.2483820915222168
+ ----- the total count in the table ------
+skipped....time cost:  3.0994415283203125e-06
+---------- netease_max -----------------
+------ sql query result shape --------
+(2833, 13)
+time cost:  86.84308123588562
+------ sql query result first 10 rows --------
+time cost:  11.48591136932373
+ ----- the total count in the table ------
+       count
+0  120052548
+time cost:  47.81165647506714

@@ -1,0 +1,7 @@
+__pycache__/**
+temp_output/**
+.ipynb_checkpoints/**
+**/.ipynb_checkpoints/**
+.~lock*
+input_data/**
+

@@ -1,0 +1,25 @@
+,database,time_cost,shape,sql_query
+0,kugou,33.81178569793701,"(2593, 14)","SELECT ks.*, ka.album_name
+        FROM kugou_songs ks
+        LEFT JOIN kugou_albums ka ON ks.album_id = ka.album_id
+        WHERE 153413 = ANY(ks.singer_ids)
+        OR 175750 = ANY(ks.singer_ids)
+        OR 153666 = ANY(ks.singer_ids)        
+        "
+1,qqmusicv2,397.9646894931793,"(2924, 10)","
+        SELECT song_mid, song_name, album_mid, album_name, artist_mid, singer_names,
+        comment_number, singer_mids, company, release_date
+        FROM songs
+        WHERE '002Vj8o12l10eK' = ANY(singer_mids)
+        or '001fbZH44WRuKW' = ANY(singer_mids)
+        or '000Eqw823oivl5' = ANY(singer_mids)
+        "
+2,netease_max,91.40136170387268,"(2833, 13)","
+        SELECT album_id, song_id, song_name, artist_id, copyright_id, deprecated_artist_name, artist_ids,
+        comment_count, audit_songs.artist_array, album_name, release_date, company, song_array
+        FROM audit_songs
+        INNER JOIN audit_albums USING (album_id)
+        where '102714' = any(audit_songs.artist_array)
+        or '792429' = any(audit_songs.artist_array)
+        or '45336' = any(audit_songs.artist_array)
+    "
