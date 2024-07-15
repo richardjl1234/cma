@@ -1,6 +1,8 @@
 from rds_access import execute_sql_query, DatabaseConnection
 import pandas as pd
 import os
+from pathlib import Path
+import time
 
 # get the POSTGRE related parameter from the os enviroments
 # remember to run the command `source ../../cma_setup.sh` before run this program
@@ -29,12 +31,17 @@ while True:
     lines.append(line)
 sql_query = '\n'.join(lines)
 
+# cacaluate the time spent in the following query   
+start = time.time()
 with DatabaseConnection(conn_params) as conn:
     print("--------------------------------------")
     print("SQL query:")
     print(sql_query)
     df = execute_sql_query(sql_query, conn)
     print(df.shape)
+
+end = time.time()   
+print(f"Time spent: {end - start} seconds")
 
 # setup the pandas dataframe print options, limit rows to be 5, and no limitatoin on the column width
 pd.set_option('display.max_rows', 5)
@@ -49,10 +56,10 @@ else:
 print(df.head(100))
 
 # get the file name from the prompt, if the file name is not provided, use the default name "result.csv"
-print("Enter the file name to save the result (press enter to use default 'result.csv'):")
-file_name = input()
-if file_name == "":
-    file_name = "result.csv"        
+print("Enter the file name to save the result to folder temp_output (press enter to use default filename 'result.csv'):")
+path = Path("temp_output")
+fname = input()
+file_name = path / (fname if fname else "result.csv")
 
 # get the input from prompt to determin if output file should be transposed.
 print("Do you want to transpose the result? (y/n):")

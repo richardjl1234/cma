@@ -1,4 +1,4 @@
-from rds_access import execute_sql_query, DatabaseConnection, ConnParams
+from modules.rds_access import execute_sql_query, DatabaseConnection, ConnParams
 import os
 
 conn_params = ConnParams(os.environ["POSTGRE_HOST"], 5432, "kugou",  os.environ["POSTGRE_USER"], os.environ["POSTGRE_PWD"] )
