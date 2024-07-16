@@ -1,7 +1,14 @@
-from rds_access import execute_sql_query, DatabaseConnection
+import sys
+import pathlib
+from pathlib import Path
+
+proj_root = pathlib.Path(__file__).parent.parent
+sys.path.append(str(proj_root))
+# print(sys.path)
+
+from modules.rds_access import execute_sql_query, DatabaseConnection
 import pandas as pd
 import os
-from pathlib import Path
 import time
 
 # get the POSTGRE related parameter from the os enviroments

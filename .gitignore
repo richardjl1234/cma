@@ -4,4 +4,7 @@ temp_output/**
 **/.ipynb_checkpoints/**
 .~lock*
 input_data/**
+temp/** 
+output/**
+log/**
 

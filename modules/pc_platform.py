@@ -2,7 +2,6 @@ import pandas as pd
 import re
 import os
 
-
 # Define the regex patterns for extraction and removal
 EXTRACTION_PATTERNS = [
    (r"[\( \[](?:Ft|Feat|W\/|\.| )([^()\[\]]+)[\) \]]", "additional_artist"),
@@ -143,6 +142,8 @@ def merge_data(qq_path, netease_path, kugou_path, output_path):
 
 
    return master_df
+
+
 
 
 def main():
