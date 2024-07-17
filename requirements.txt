@@ -1,2 +1,4 @@
-pandas
-psycopg-binary
+pandas==2.2.2
+psycopg2-binary==2.9.9
+cdifflib==1.2.6
+fuzzywuzzy==0.18.0

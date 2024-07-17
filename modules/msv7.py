@@ -1,15 +1,20 @@
 import pandas as pd
 from fuzzywuzzy import fuzz
+import logging
+
+
+CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 'Unique Song ID', 'Unique Version ID']
+PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 'pc_artist', 'pc_version'] 
 
 
 def extract_columns(excel_path, csv_path):
    """
    Extract specific columns from Excel and CSV files.
    """
-   print("📂 Extracting data from files...")
-   client_df = pd.read_excel(excel_path, usecols=['cc_track', 'cc_version', 'c_track', 'cc_artist', 'Unique Song ID', 'Unique Version ID'])
-   platform_df = pd.read_csv(csv_path, usecols=['p_song_id', 'p_track', 'pc_track', 'pc_artist', 'pc_version'])
-   print("Data extracted.")
+   logging.info("📂 Extracting data from files...")
+   client_df = pd.read_excel(excel_path, usecols=CLIENT_COLS)
+   platform_df = pd.read_csv(csv_path, usecols=PLATFORM_COLS)
+   logging.info("Data extracted.")
    return client_df, platform_df
 
 
@@ -17,7 +22,7 @@ def preprocess_data(client_df, platform_df):
    """
    Add a preprocessing step to clean the data appropriately.
    """
-   print("🔄 Preprocessing data...")
+   logging.info("🔄 Preprocessing data...")
 
 
    # Lower the cases and then remove the leading + trailing whitespaces (to standardize the data)
@@ -31,7 +36,7 @@ def preprocess_data(client_df, platform_df):
 
    # Aggregate the data to handle possible duplicates and reset the index
    client_df = client_df.groupby(['cc_track', 'cc_version']).first().reset_index()
-   print("Data preprocessed.")
+   logging.info("Data preprocessed.")
 
 
    return client_df, platform_df
@@ -41,7 +46,7 @@ def match_tracks(client_df, platform_df):
    """
    Match the tracks from the 'platform' dataframe to the 'client' dataframe.
    """
-   print("🔍 Matching tracks...")
+   logging.info("🔍 Matching tracks...")
 
 
    matched = []
@@ -72,7 +77,7 @@ def match_tracks(client_df, platform_df):
 
 
        if index % 100 == 0:
-           print(f"Processed {index + 1} tracks...")
+           logging.info(f"Processed {index + 1} tracks...")
 
 
    for track in unmatched_tracks:
@@ -100,7 +105,7 @@ def match_tracks(client_df, platform_df):
                unmatched.extend(unmatched_rows.to_dict('records'))
 
 
-   print("Matching completed.")
+   logging.info("Matching completed.")
    return pd.DataFrame(matched), pd.DataFrame(unmatched)
 
 
@@ -108,7 +113,7 @@ def save_to_excel(matched_df, unmatched_df, output_path):
    """
    Save the results to the 'matched_results.xlsx' workbook.
    """
-   print("💾 Saving results to Excel...")
+   logging.info("💾 Saving results to Excel...")
    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
        # Save matched data to 'Matched' sheet
        matched_df.to_excel(writer, sheet_name='Matched', index=False)
@@ -116,7 +121,7 @@ def save_to_excel(matched_df, unmatched_df, output_path):
        # Save unmatched data to 'Matched' sheet starting from row after matched data
        unmatched_df.to_excel(writer, sheet_name='Matched', startrow=matched_df.shape[0]+2, index=False)
       
-   print("📊 Data saved to Excel. Check the output file at:", output_path)
+   logging.info("📊 Data saved to Excel. Check the output file at:", output_path)
 
 
 def run_matching_operation():

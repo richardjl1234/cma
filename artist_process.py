@@ -5,13 +5,16 @@
 import logging
 from pathlib import Path
 import pandas as pd
-from settings import LOG_PATH, OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING
+# TODO, the SKIP_ARTIST, STOP_ARTIST need to be utilized 
+from settings import LOG_PATH, OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, SKIP_DATA_FEED, SKIP_ARTIST, STOP_ARTIST, STOP_DATA_FEED, ARTIST_NAME
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
-from modules.rds_access import execute_sql_query, DatabaseConnection
+from modules.rds_access import execute_sql_query, DatabaseConnection, DatabaseQueryException
 
 from modules.common import timeit
 from collections import namedtuple
 from modules.pc_platform import clean_song_data
+from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_COLS, PLATFORM_COLS
+
 
 log_name = LOG_PATH / 'artist_process.log'
 # setup the logging to output the log to console and log file. 
@@ -44,10 +47,10 @@ def get_artist_statement(artist_info, input_folder= "input_data")   :
 
     ########################################################################## 
     # for those rows which has blank track name, output the report in the output folder
-    # get the disctinct song_name from the df_singer.cc_track column, save to song_names, and make them to lower case
-    df_singer = df_singer.fillna('')
+    # get the disctinct song_name from the df_singer.cc_track column, save to song_names, 
+    df_singer = df_singer
     rows_empty_track_name = "{}.csv".format(artist_name + "_EMPTY_TRACK_NAME")
-    logging.info("--------------- ROWS with EMPTY TRACK NAME are detected for artist '{}', those rows has been save to file '{}' ------".format(artist_name, rows_empty_track_name))
+    logging.warning("^^^^ ROWS with EMPTY TRACK NAME are detected for artist '{}', those rows has been save to file '{}' ".format(artist_name, rows_empty_track_name))
     df_singer.loc[df_singer["cc_track"] == ''].to_csv(OUTPUT_PATH / rows_empty_track_name )
 
     return df_singer
@@ -63,7 +66,7 @@ def get_platform_data(platform, song_name):
         return None
 
     # get the sql statement template based on the platform name
-    sql = SQL_SONG[platform].format(song_name=song_name)
+    sql = SQL_SONG[platform].format(song_name=song_name.replace("'", "''")) # when single quote included in the name, doubling the single quote
     logging.info("Now run the query from platform '{platform}' to get the rows for song name '{song_name}'".format(platform = platform, song_name = song_name))
     logging.debug("The sql statement is: {}".format(sql))
     conn_param = get_conn_params(platform)
@@ -71,44 +74,101 @@ def get_platform_data(platform, song_name):
     # run the query to get the data based on the song name
     with DatabaseConnection(conn_param) as conn:
         df_song = execute_sql_query(sql, conn )
+
+        if df_song is None: 
+            logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
+            raise DatabaseQueryException
+
         if df_song.empty: 
             logging.warning("No rows returned for song name '{song_name}' from the platform '{platform}'".format(song_name=song_name, platform= platform))
-            return None
+            return pd.DataFrame()
         logging.info("{count} rows returned based on the song name '{song_name}' for the platform '{platform}'".format(
                 count = df_song.shape[0], song_name=song_name, platform = platform))
     return df_song
 
+def process_platform_song_df(artist_name, song_name, platform):
+    '''
+    This function is to get the data from the platform database based on the song_name (ilike), 
+    then refine the results so that only the rows related to the artist name will be kept
+    input: 
+    '''
+    df_platform_song = get_platform_data(platform=platform, song_name=song_name)
+
+    if df_platform_song.empty: 
+        return df_platform_song 
+
+    # replace the column name to the standard column name based on the column mapping information
+    df_platform_song = df_platform_song.rename(columns=COLUMN_MAPPING[platform])
+
+    # do the clean process for the platform data
+    df_platform_cleaned_song = clean_song_data(df_platform_song)
+    
+    # reorg the columns in the cleaned_df_platform_song dataframe, the columns name should be sorted in asceding order
+    df_platform_cleaned_song = df_platform_cleaned_song.loc[:, df_platform_cleaned_song.columns.sort_values()]
+    
+    ##################################################################################
+    # now process the platform rows so that only the rows related to the songs will be kept
+
+    return df_platform_cleaned_song 
+
 
 if __name__ == "__main__":
+    logging.info("<<<<< The program started >>>>>>")
     
     ############################################################################ 
     # get the singer statement information from the client statement excel sheet
-    artist_info = ("Two Steps From Hell", "cc_twosteps.xlsx") 
-    df_singer = get_artist_statement(artist_info)
+    artist_info = (ARTIST_NAME, "cc_twosteps.xlsx") 
+    logging.info("----- Processing the artist '{}'".format(artist_info[0]))
+    df_client_singer = get_artist_statement(artist_info)
 
     ########################################################################## 
-    # get the disctict song names from the df_singer
-    song_names = df_singer['cc_track'].str.lower().unique()
+    # get the disctict song names from the df_client_singer
+    song_names = df_client_singer['cc_track'].fillna('').unique()
     logging.info("There are {} unique songs for artist '{}'".format(len(song_names), artist_info[0]))
     logging.debug("The songs names are: {}".format('\n'.join(song_names)))
 
     # create the generator to generate the platform and song name
     DataFeed = namedtuple("DataFeed", ['platform', 'song_name'])
     data_feeds = iter([DataFeed(platform, song_name) 
-                      for platform in PLATFORMS[:2]
-                      for song_name in song_names[:1]])
-    
+                      for platform in PLATFORMS
+                      for song_name in song_names if song_name.strip() !=''])
+
     # data_feed = next(data_feeds)
-    for data_feed in data_feeds: 
-        df_platform_song = get_platform_data(platform=data_feed.platform, song_name=data_feed.song_name)
+    dfs_p = [] # dfs_p is a temperory list 
+    for seq_no, data_feed in enumerate(data_feeds): 
+        logging.info("** Current seq is {seq_no}, ".format(seq_no=seq_no))
+        if seq_no < SKIP_DATA_FEED: 
+            logging.warning("The skip value is {skip}, current seq number is {seq_no}, skip to next data feed....".format(skip = SKIP_DATA_FEED, seq_no=seq_no))
+            continue
 
-        # replace the column name to the standard column name based on the column mapping information
-        df_platform_song = df_platform_song.rename(columns=COLUMN_MAPPING[data_feed.platform])
+        if seq_no > STOP_DATA_FEED: 
+            logging.warning("The stop value is {stop}, current seq number is {seq_no}, Now stop the iteration....".format(stop = STOP_DATA_FEED, seq_no=seq_no))
+            break
 
-        # do the clean process for the platform data
-        cleaned_df_platform_song = clean_song_data(df_platform_song)
 
-        ## TODO the following line is temperory line, to be deleted
-        cleaned_df_platform_song.to_csv(OUTPUT_PATH/"{platform}-{song_name}.csv".format(
-            platform=data_feed.platform, song_name = data_feed.song_name))
+        df_platform_cleaned_song= process_platform_song_df(artist_info[0], data_feed.song_name, data_feed.platform)
     
+        ## TODO the following line is temperory line, to be deleted
+        df_platform_cleaned_song.to_csv(OUTPUT_PATH/"{platform}-{song_name}.csv".format(
+            platform=data_feed.platform, song_name = data_feed.song_name))
+
+        dfs_p.append(df_platform_cleaned_song)
+
+        
+
+    # merge all the platform_song dataframe together 
+    df_platform = pd.concat(dfs_p)
+    
+    # filter the columns for dataframe df_client_singer and df_platform, using CLIENT_COLS and PLATFORM_COLS
+    df_client_singer = df_client_singer.loc[:, CLIENT_COLS]
+    df_platform =  df_platform.loc[:, PLATFORM_COLS]
+
+
+    df_client_singer, df_platform = preprocess_data(df_client_singer, df_platform) 
+
+    ## TODO the following line is temperory line, to be deleted
+    df_platform.to_csv(OUTPUT_PATH/"PLATFORM.csv")
+    df_client_singer.to_csv(OUTPUT_PATH/"CLIENT_SINGER.csv")
+
+    # matched_df, unmatched_df = match_tracks(client_df, platform_df)
+    # save_to_excel(matched_df, unmatched_df, output_path)

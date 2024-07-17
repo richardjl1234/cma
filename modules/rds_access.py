@@ -4,6 +4,12 @@
 import psycopg2
 import pandas as pd
 from collections import namedtuple
+import logging
+
+# define a customized class DatabaseQueryException
+class DatabaseQueryException(Exception):
+    pass
+
 
 # define a namedtuple for db connection parameters
 ConnParams = namedtuple('ConnParams', ['host', 'port', 'database', 'user', 'password'])
@@ -24,7 +30,7 @@ def execute_sql_query(sql, conn):
             df = pd.DataFrame(result, columns=column_names)
             return df
     except (Exception, psycopg2.Error) as error:
-        print("Error while executing SQL query:", error)
+        logging.error("Error while executing SQL query:", error)
         return None
 
 # context manager to connect to the database
