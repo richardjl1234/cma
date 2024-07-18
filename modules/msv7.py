@@ -4,7 +4,7 @@ import logging
 
 
 CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 'Unique Song ID', 'Unique Version ID']
-PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 'pc_artist', 'pc_version'] 
+PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 'pc_artist', 'pc_version', 'refine_process_comment', 'refine_similarity'] 
 
 
 def extract_columns(excel_path, csv_path):

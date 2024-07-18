@@ -1,12 +1,14 @@
 # this module will take the artist_info as input, the platforms
-# artist_info is a tuple: (artist_name, file_name)
+# artist_info is a tuple: (artist_name, client_statement_file)
 # then read the excel file based on the artist name. 
 # then call the function artist_per_platform_process
+import os
+import pickle
 import logging
 from pathlib import Path
 import pandas as pd
 # TODO, the SKIP_ARTIST, STOP_ARTIST need to be utilized 
-from settings import LOG_PATH, OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, SKIP_DATA_FEED, SKIP_ARTIST, STOP_ARTIST, STOP_DATA_FEED, ARTIST_NAME
+from settings import LOG_PATH, OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, START_DATA_FEED_IDX, START_ARTIST_INDEX, END_ARTIST_INDEX, END_DATA_FEED_IDX, ARTIST_NAMES, LOG_LEVEL
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
 from modules.rds_access import execute_sql_query, DatabaseConnection, DatabaseQueryException
 
@@ -18,7 +20,7 @@ from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_CO
 
 log_name = LOG_PATH / 'artist_process.log'
 # setup the logging to output the log to console and log file. 
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(level=LOG_LEVEL,
                     format='%(asctime)s : %(levelname)s : %(message)s',
                     handlers=[logging.FileHandler(log_name, mode='a'),
                               logging.StreamHandler()
@@ -26,16 +28,24 @@ logging.basicConfig(level=logging.INFO,
                     )
 
 @timeit
-def get_artist_statement(artist_info, input_folder= "input_data")   :
-    ########################################################################## 
-    # unpack the artist_info and store them in artist_name, file_name
-    artist_name, file_name = artist_info
-   
+def get_artist_statement(artist_name, client_statement_file, input_folder= "input_data")   :
     ########################################################################## 
     # read the file_name into data frame
-    logging.info("Read the execl file '{}' to memory...".format(file_name))
-    excel_file_path = Path(input_folder) / file_name 
-    df_artists = pd.read_excel(excel_file_path)
+    logging.info("Read the excel file '{}' to memory...".format(client_statement_file))
+    _, file_ext= os.path.splitext(client_statement_file)
+    print(file_ext)
+
+    input_file_full_path = Path(input_folder) / client_statement_file 
+
+    if file_ext == '.pkl':
+        with open(input_file_full_path, 'rb') as f:
+            df_artists = pickle.load(f)
+    elif file_ext == '.csv':
+        df_artists = pd.read_csv(input_file_full_path)
+    else: 
+        df_artists = pd.read_excel(input_file_full_path)
+
+    logging.info("The dataframe has {} rows".format(df_artists.shape[0]))
 
     ########################################################################## 
     # Get the data for the artist name only from the dataframe df_artists, the df_singer is for only one singer
@@ -56,8 +66,9 @@ def get_artist_statement(artist_info, input_folder= "input_data")   :
     return df_singer
 
 @timeit
-def get_platform_data(platform, song_name): 
+def get_platform_song_data(platform, song_name): 
     """
+    Funtion to get the raw platform data from the platform database, based on the platform name and the song name
     input: platform name, song_name
     output: dataframe of the platform data for the song_name
     """
@@ -73,26 +84,47 @@ def get_platform_data(platform, song_name):
 
     # run the query to get the data based on the song name
     with DatabaseConnection(conn_param) as conn:
-        df_song = execute_sql_query(sql, conn )
+        df_platform_song_raw = execute_sql_query(sql, conn )
 
-        if df_song is None: 
+        if df_platform_song_raw is None: 
             logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
             raise DatabaseQueryException
 
-        if df_song.empty: 
+        if df_platform_song_raw.empty: 
             logging.warning("No rows returned for song name '{song_name}' from the platform '{platform}'".format(song_name=song_name, platform= platform))
             return pd.DataFrame()
         logging.info("{count} rows returned based on the song name '{song_name}' for the platform '{platform}'".format(
-                count = df_song.shape[0], song_name=song_name, platform = platform))
-    return df_song
+                count = df_platform_song_raw.shape[0], song_name=song_name, platform = platform))
+    return df_platform_song_raw
 
-def process_platform_song_df(artist_name, song_name, platform):
+def clean_refine_platform_song_data(data_feed):
     '''
     This function is to get the data from the platform database based on the song_name (ilike), 
-    then refine the results so that only the rows related to the artist name will be kept
+    1. call the function get_platform_song_data to get the raw data from the platform database
+    2. if the raw data is empty, return an empty dataframe
+    3. otherwise, clean the data by calling the function clean_song_data
+    4. reorg the columns in the cleaned_df_platform_song dataframe, the columns name should be sorted in asceding order
+    5. Refine the rows based on the following criteria:
+        a. remove the enclosing double quote and single quote in the pc_track column, remove the leading blanks in the pc_track column
+        b. first round, get all the rows which pc_track is equal to the song_name. and artist name equal to artist name or album name equal to album name
+        and get the additional artist name and album name from the pc_artist and pc_album columns. Add one more column the refine_process_comment, add the refine_similarity to EXACT MATCH
+        c. second round, get all the rows which pc_track is equal to the song_name, artist name equal to alias atrist name or album name equal to alias name, add the information in the 
+        refine_process_comment column as well., similarity to HIGHLY SIMILAR 
+        d, third round,  
+
+    6. return the refined dataframe
+        a. keep the rows related to the artist name
+        b. keep the rows related to the song name (ilike)
+        c. keep the rows related to the platform name
+        d. keep the rows related to the album name
+    
     input: 
+    artist_name, song_name, platform 
     '''
-    df_platform_song = get_platform_data(platform=platform, song_name=song_name)
+    artist_name, song_name, platform = data_feed.artist_name, data_feed.song_name, data_feed.platform
+
+    logging.info("Start to clean and refine the platform data for artist '{}' song '{}' on the platform '{}'".format(artist_name, song_name, platform))
+    df_platform_song = get_platform_song_data(platform=platform, song_name=song_name)
 
     if df_platform_song.empty: 
         return df_platform_song 
@@ -108,67 +140,96 @@ def process_platform_song_df(artist_name, song_name, platform):
     
     ##################################################################################
     # now process the platform rows so that only the rows related to the songs will be kept
+    # TODO need to add the logic to refine the rows in the 
+    # TODO need to add the logic to refine the rows in the 
+    # TODO need to add the logic to refine the rows in the 
+    # TODO need to add the logic to refine the rows in the 
+    # TODO need to add the logic to refine the rows in the 
+    df_platform_cleaned_song['refine_process_comment'] = ''
+    df_platform_cleaned_song['refine_similarity'] = ''
 
     return df_platform_cleaned_song 
 
-
-if __name__ == "__main__":
-    logging.info("<<<<< The program started >>>>>>")
-    
+def main(artist_name, client_statement_file): 
     ############################################################################ 
     # get the singer statement information from the client statement excel sheet
-    artist_info = (ARTIST_NAME, "cc_twosteps.xlsx") 
-    logging.info("----- Processing the artist '{}'".format(artist_info[0]))
-    df_client_singer = get_artist_statement(artist_info)
+    logging.info("----- Processing the artist '{}'".format(artist_name))
+    df_client_singer = get_artist_statement(artist_name, client_statement_file)
+
 
     ########################################################################## 
     # get the disctict song names from the df_client_singer
-    song_names = df_client_singer['cc_track'].fillna('').unique()
-    logging.info("There are {} unique songs for artist '{}'".format(len(song_names), artist_info[0]))
+    song_names = list(df_client_singer['cc_track'].fillna('').unique())
+
+    ############################################################################ 
+    # get the singer statement information from the client statement excel sheet
+    ## TODO the album name list need to be created based on the song name
+    ## TODO the album name list need to be created based on the song name
+    ## TODO the album name list need to be created based on the song name
+    # get the albums name based on the song name 
+    # this is a dict, the key is the song_name, and the value is the album names list related to this song 
+    album_names_dict  = {} 
+
+    # TODO move the el dorado to the first element for testing
+    # TODO move the el dorado to the first element for testing
+    # TODO move the el dorado to the first element for testing
+    if "el dorado" in song_names:
+        song_names.remove("el dorado")
+        song_names = ["el dorado"] + song_names
+
+
+    logging.info("There are {} unique songs for artist '{}'".format(len(song_names), artist_name))
     logging.debug("The songs names are: {}".format('\n'.join(song_names)))
 
     # create the generator to generate the platform and song name
-    DataFeed = namedtuple("DataFeed", ['platform', 'song_name'])
-    data_feeds = iter([DataFeed(platform, song_name) 
-                      for platform in PLATFORMS
-                      for song_name in song_names if song_name.strip() !=''])
+    DataFeed = namedtuple("DataFeed", ['artist_name', 'platform', 'song_name', 'album_names'])
+    data_feeds = [DataFeed(artist_name, platform, song_name, album_names_dict.get(song_name, '')) 
+                      for song_name in song_names if song_name.strip() !='' 
+                      for platform in PLATFORMS ]
 
     # data_feed = next(data_feeds)
-    dfs_p = [] # dfs_p is a temperory list 
+    df_platform_concated = pd.DataFrame()
     for seq_no, data_feed in enumerate(data_feeds): 
-        logging.info("** Current seq is {seq_no}, ".format(seq_no=seq_no))
-        if seq_no < SKIP_DATA_FEED: 
-            logging.warning("The skip value is {skip}, current seq number is {seq_no}, skip to next data feed....".format(skip = SKIP_DATA_FEED, seq_no=seq_no))
+        logging.info("****** Current seq is {seq_no}, ".format(seq_no=seq_no))
+        logging.debug("======The data feed is: {}".format(data_feed))
+        if seq_no < START_DATA_FEED_IDX: 
+            logging.warning("The start index is {start}, current seq number is {seq_no}, skip to next data feed....".format(start = START_DATA_FEED_IDX, seq_no=seq_no))
             continue
 
-        if seq_no > STOP_DATA_FEED: 
-            logging.warning("The stop value is {stop}, current seq number is {seq_no}, Now stop the iteration....".format(stop = STOP_DATA_FEED, seq_no=seq_no))
+        if seq_no >= END_DATA_FEED_IDX: 
+            logging.warning("The end index value is {end}, current seq number is {seq_no}, Now stop the iteration....".format(end = END_DATA_FEED_IDX, seq_no=seq_no))
             break
 
 
-        df_platform_cleaned_song= process_platform_song_df(artist_info[0], data_feed.song_name, data_feed.platform)
+        df_platform_cleaned_song= clean_refine_platform_song_data(data_feed)
     
-        ## TODO the following line is temperory line, to be deleted
-        df_platform_cleaned_song.to_csv(OUTPUT_PATH/"{platform}-{song_name}.csv".format(
-            platform=data_feed.platform, song_name = data_feed.song_name))
+        ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
+        if LOG_LEVEL == logging.DEBUG:
+            df_platform_cleaned_song.to_csv(OUTPUT_PATH/ "debug" / "{artist_name}-{platform}-{song_name}.csv".format(
+                artist_name= data_feed.artist_name, 
+                platform= data_feed.platform, 
+                song_name = data_feed.song_name))
 
-        dfs_p.append(df_platform_cleaned_song)
+        df_platform_concated = pd.concat([df_platform_concated, df_platform_cleaned_song])
 
-        
-
-    # merge all the platform_song dataframe together 
-    df_platform = pd.concat(dfs_p)
     
     # filter the columns for dataframe df_client_singer and df_platform, using CLIENT_COLS and PLATFORM_COLS
     df_client_singer = df_client_singer.loc[:, CLIENT_COLS]
-    df_platform =  df_platform.loc[:, PLATFORM_COLS]
+    df_platform_concated =  df_platform_concated.loc[:, PLATFORM_COLS]
 
 
-    df_client_singer, df_platform = preprocess_data(df_client_singer, df_platform) 
+    df_client_singer, df_platform_concated = preprocess_data(df_client_singer, df_platform_concated) 
 
-    ## TODO the following line is temperory line, to be deleted
-    df_platform.to_csv(OUTPUT_PATH/"PLATFORM.csv")
-    df_client_singer.to_csv(OUTPUT_PATH/"CLIENT_SINGER.csv")
+    ## when log_level is debug, then output the file to debug folder 
+    if LOG_LEVEL == logging.DEBUG:
+        df_platform_concated.to_csv(OUTPUT_PATH/ "debug"/ "PLATFORM_{}.csv".format('_'.join(artist_name.split())))
+        df_client_singer.to_csv(OUTPUT_PATH/ "debug" / "CLIENT_{}.csv".format('_'.join(artist_name.split())))
 
     # matched_df, unmatched_df = match_tracks(client_df, platform_df)
     # save_to_excel(matched_df, unmatched_df, output_path)
+
+if __name__ == "__main__":
+    logging.info("<<<<< The program started >>>>>>")
+    for artist_name in ARTIST_NAMES:
+        main(artist_name, "cc_twosteps.pkl")
+    

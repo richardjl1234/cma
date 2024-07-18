@@ -6,6 +6,13 @@ import pandas as pd
 from collections import namedtuple
 import logging
 
+keepalive_kwargs = {
+    "keepalives": 1,
+    "keepalives_idle": 30,
+    "keepalives_interval": 5,
+    "keepalives_count": 5,
+}
+
 # define a customized class DatabaseQueryException
 class DatabaseQueryException(Exception):
     pass
@@ -45,7 +52,7 @@ class DatabaseConnection:
         self.conn_params = conn_params._asdict() if isinstance(conn_params, ConnParams) else conn_params
 
     def __enter__(self):
-        self.conn = psycopg2.connect(**self.conn_params)
+        self.conn = psycopg2.connect(**self.conn_params, **keepalive_kwargs)
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
