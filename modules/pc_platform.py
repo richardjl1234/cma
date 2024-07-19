@@ -1,6 +1,10 @@
 import pandas as pd
 import re
 import os
+import logging
+
+class RefineLogicFuncNotDefined(Exception):
+   pass 
 
 # Define the regex patterns for extraction and removal
 EXTRACTION_PATTERNS = [
@@ -144,6 +148,23 @@ def merge_data(qq_path, netease_path, kugou_path, output_path):
    return master_df
 
 
+# TODO refine logic for df_platform_song_raw
+def refine_logic_netease_max(data_feed, df_platform_song):
+    return df_platform_song
+
+# TODO refine logic for df_platform_song_raw
+def refine_logic_kugou(data_feed, df_platform_song ):
+    return df_platform_song
+
+# define the refine logic for platform data
+def refine_logics(platform):
+    if platform == 'netease_max': 
+        return refine_logic_netease_max
+    elif platform == 'kugou':
+        return refine_logic_kugou
+    else: 
+        logging.error(f'Invalid platform: {platform}, the refining logic has not been defined for this platform yet...')
+        return None
 
 
 def main():

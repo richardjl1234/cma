@@ -2,7 +2,7 @@
 # artist_info is a tuple: (artist_name, client_statement_file)
 # then read the excel file based on the artist name. 
 # then call the function artist_per_platform_process
-import os
+import os, sys
 import pickle
 import logging
 from pathlib import Path
@@ -14,8 +14,9 @@ from modules.rds_access import execute_sql_query_retriable, DatabaseQueryExcepti
 
 from modules.common import timeit
 from collections import namedtuple
-from modules.pc_platform import clean_song_data
+from modules.pc_platform import clean_song_data, refine_logics, RefineLogicFuncNotDefined
 from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_COLS, PLATFORM_COLS
+import pickle
 
 
 DataFeed = namedtuple("DataFeed", ['artist_seq_no', 'artist_name', 'platform', 'song_name', 'album_names'])
@@ -54,7 +55,7 @@ def get_artist_statement(artist_name, client_statement_file, input_folder= "inpu
     artists = df_artists['c_artist'].unique()
     logging.debug("There are {} rows in the dataframe, the list of the artist name are: {}".format(len(artists), ', '.join(artists)))
     df_singer = df_artists.loc[df_artists['c_artist'] == artist_name]
-    logging.debug("The column names in the df_singer are: {} ".format('\n'.join(df_singer.columns)))
+    logging.debug("The column names in the df_singer are:\n {} \n".format(', '.join(df_singer.columns)))
 
     ########################################################################## 
     # for those rows which has blank track name, output the report in the output folder
@@ -120,15 +121,31 @@ def clean_refine_platform_song_data(data_feed):
         d. keep the rows related to the album name
     
     input: 
-    artist_name, song_name, platform 
+    artist_name, song_name, platform, album name list
     '''
-    artist_name, song_name, platform = data_feed.artist_name, data_feed.song_name, data_feed.platform
+    # unpack the data feed
+    artist_seq_no, artist_name, platform, song_name,  album_names = data_feed
 
-    logging.info("Start to clean and refine the platform data for artist '{}' song '{}' on the platform '{}'".format(artist_name, song_name, platform))
+    logging.info("Start to clean and refine the platform data for artist seq {} artist '{}' song '{}' on the platform '{}, album names are {}'".format(
+        artist_seq_no, artist_name, song_name, platform, album_names))
+
     df_platform_song = get_platform_song_data(platform=platform, song_name=song_name)
 
     if df_platform_song.empty: 
         return df_platform_song 
+
+    ######################################################################
+    # REFINEMENT LOGIC
+    # now process the data and refine it for every specific platform 
+    logging.info("the shape of df_platform_song (before refinement) is {}: ".format(df_platform_song.shape))
+
+    refine_logic_func =refine_logics(platform) 
+    if refine_logic_func: 
+        logging.info("The refine logic function is: {}".format(refine_logic_func.__name__))
+        df_platform_song = refine_logic_func(data_feed, df_platform_song)
+        logging.info("the shape of refined df_platform_song is {}".format(df_platform_song.shape))
+    else: 
+        raise RefineLogicFuncNotDefined
 
     # replace the column name to the standard column name based on the column mapping information
     df_platform_song = df_platform_song.rename(columns=COLUMN_MAPPING[platform])
@@ -151,8 +168,12 @@ def clean_refine_platform_song_data(data_feed):
 
     return df_platform_cleaned_song 
 
-def process_one_artist(artist_seq_no, artist_name, client_statement_file): 
-    df_platform_concat_dict = {p: pd.DataFrame()  for p in PLATFORMS}
+def process_one_artist(artist_seq_no, artist_name, client_statement_file, restart_snapshot = None): 
+    if restart_snapshot is None: 
+        df_platform_concat_dict = {p: pd.DataFrame()  for p in PLATFORMS}
+    else: 
+        restart_artist_seq_no, restart_data_feed_seq_no, df_platform_concat_dict = restart_snapshot
+
 
     ############################################################################ 
     # get the singer statement information from the client statement excel sheet
@@ -163,13 +184,12 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
     song_names = list(df_client_singer['cc_track'].fillna('').unique())
 
     ############################################################################ 
-    # get the singer statement information from the client statement excel sheet
-    ## TODO the album name list need to be created based on the song name
-    ## TODO the album name list need to be created based on the song name
-    ## TODO the album name list need to be created based on the song name
     # get the albums name based on the song name 
     # this is a dict, the key is the song_name, and the value is the album names list related to this song 
-    album_names_dict  = {} 
+    album_names_dict  = { song_name:  
+                         df_client_singer.loc[df_client_singer['cc_track'].str.lower() == song_name.lower()]['Album Name'].str.lower().drop_duplicates().tolist() 
+                         for song_name in song_names}
+    logging.debug("The album names dict is: {}".format(album_names_dict))
 
     # TODO move the el dorado to the first element for testing
     # TODO move the el dorado to the first element for testing
@@ -180,7 +200,7 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
 
 
     logging.info("There are {} unique songs for artist '{}'".format(len(song_names), artist_name))
-    logging.debug("The songs names are: {}".format('\n'.join(song_names)))
+    logging.debug("The songs names are: \n{}\n".format(', '.join(song_names)))
 
     # create the generator to generate the platform and song name
     data_feeds = [DataFeed(artist_seq_no, artist_name, platform, song_name, album_names_dict.get(song_name, '')) 
@@ -189,11 +209,11 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
 
     # data_feed = next(data_feeds)
     for data_feed_seq_no, data_feed in enumerate(data_feeds): 
-        logging.info("****** Current artist seq is {artist_seq_no}, data feed seq is {data_feed_seq_no}, ".format(
+        logging.info("****** Current artist seq is {artist_seq_no}, data feed seq is {data_feed_seq_no} \n".format(
             artist_seq_no = data_feed.artist_seq_no, data_feed_seq_no=data_feed_seq_no))
         logging.debug("======The data feed is: {}".format(data_feed))
 
-        if data_feed_seq_no < START_DATA_FEED_IDX and artist_seq_no <= START_ARTIST_INDEX: 
+        if data_feed_seq_no < (START_DATA_FEED_IDX if restart_snapshot is None else restart_data_feed_seq_no) and artist_seq_no <= (START_ARTIST_INDEX if restart_snapshot is None else restart_artist_seq_no): 
             logging.warning("The start data feed index is {start}, current data feed seq is {seq_no}, skipped ....".format(start = START_DATA_FEED_IDX, seq_no=data_feed_seq_no))
             continue
 
@@ -207,16 +227,15 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
         try: 
             df_platform_cleaned_song= clean_refine_platform_song_data(data_feed)
         except DatabaseQueryException: 
-            for platform in PLATFORMS:
-                platform_partial_concated_file_name = OUTPUT_PATH / "{artist_index}_{artist_name}_{platform}_partial_concated_ending_data_feed_idx_(non_included)_{data_feed_seq}.pkl".format(
-                    artist_name = data_feed.artist_name, platform = platform, data_feed_seq = data_feed_seq_no, artist_index=data_feed.artist_seq_no)
-                logging.info("The platform {} data has been stored in the file {}".format(platform, platform_partial_concated_file_name))
-
-                df_platform_concat_dict[platform].to_pickle(platform_partial_concated_file_name)
+            snapshot_filename = OUTPUT_PATH / "snapshot.pkl"
+            # write the snapshot to pick file
+            with open(snapshot_filename, 'wb') as f: 
+                snapshot = (data_feed.artist_seq_no, data_feed_seq_no, df_platform_concat_dict)
+                pickle.dump(snapshot, f)
 
             logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
-            logging.error("^^^^^^^ The process stopped at artist no {}, artist name {}, data feed seq {}".format(
-                data_feed.artist_seq_no, data_feed.artist_name, data_feed_seq_no))
+            logging.error("^^^^^^^ The process stopped at artist no {}, artist name {}, data feed seq {}".format(data_feed.artist_seq_no, data_feed.artist_name, data_feed_seq_no))
+            logging.info("^^^^^^^ The snapshot data has been stored in the file {}".format(str(snapshot_filename)))
             raise DatabaseQueryException  # early exit, and save the partial result file to pickle file
     
         ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
@@ -235,31 +254,51 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
     for platform in PLATFORMS: 
         df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
 
-    df_platform_concat_all = pd.concat([df_platform_concat_dict.values()])
+    df_platform_concat_all = pd.concat(df_platform_concat_dict.values())
 
 
     df_client_singer, df_platform_concat_all = preprocess_data(df_client_singer, df_platform_concat_all ) 
 
     ## when log_level is debug, then output the file to debug folder 
     if LOG_LEVEL == logging.DEBUG:
-        df_platform_concat_all.to_csv(OUTPUT_PATH/ "debug"/ "{}_{}.csv".format('_'.join(data_feed.platform, artist_name.split())))
+        df_platform_concat_all.to_csv(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.csv".format('_'.join( artist_name.split())))
         df_client_singer.to_csv(OUTPUT_PATH/ "debug" / "CLIENT_{}.csv".format('_'.join(artist_name.split())))
 
+    # TODO un-comment the following 2 lines in the future
     # matched_df, unmatched_df = match_tracks(client_df, platform_df)
     # save_to_excel(matched_df, unmatched_df, output_path)
 
 def main():
-    ## TODO need to be able to resume the data from the pickle file which have already been processed
-    ## TODO need to be able to resume the data from the pickle file which have already been processed
-    ## TODO need to be able to resume the data from the pickle file which have already been processed
-    ## TODO need to be able to resume the data from the pickle file which have already been processed
-    logging.info("<<<<< The program started >>>>>>")
-    for artist_seq_no, artist_name in enumerate(ARTIST_NAMES):
-        logging.info("********* Processing the artist '{}', artist seq no is {} *********".format(artist_name, artist_seq_no))
-        if artist_seq_no < START_ARTIST_INDEX or artist_seq_no > END_ARTIST_INDEX:
-            logging.warning("The artist seq no {seq_no} is out of the range [{start}, {end}], skipped...".format(seq_no=artist_seq_no, start=START_ARTIST_INDEX, end=END_ARTIST_INDEX))
-        else: 
-            process_one_artist(artist_seq_no, artist_name, "cc_twosteps.pkl")
+    ## Resume the data from the pickle file which have already been processed, the pickle file name is snapshot.pkl
+    if len(sys.argv) >= 2 and sys.argv[1] == 'restart':
+        # read the pickle file snapshot.pkl, into the following variables
+        logging.info("<<<<< The program RESTARTED >>>>>>")
+        with open(OUTPUT_PATH / "snapshot.pkl", 'rb') as f: 
+            restart_snapshot = pickle.load(f)
+            restart_artist_seq_no, restart_data_feed_seq, _ = restart_snapshot
+        
+        logging.info("The snapshot file has been loaded, and the RESTART artist seq no is {}, RESTART Data feed seq is {}\n".format(
+            restart_artist_seq_no, restart_data_feed_seq))
+        # now the snapshot file has been loaded, rename it 
+        os.rename(OUTPUT_PATH / "snapshot.pkl", OUTPUT_PATH / "snapshot_old.pkl")   
+        logging.info("The snapshot file has been renamed to snapshot_old.pkl")
+
+        for artist_seq_no, artist_name in enumerate(ARTIST_NAMES):
+            logging.info("********* Processing the artist '{}', artist seq no is {} *********".format(artist_name, artist_seq_no))
+            if artist_seq_no < restart_artist_seq_no or artist_seq_no > END_ARTIST_INDEX:
+                logging.warning("The artist seq no {seq_no} is out of the range [{start}, {end}], skipped...".format(seq_no=artist_seq_no, start=START_ARTIST_INDEX, end=END_ARTIST_INDEX))
+            else: 
+                process_one_artist(artist_seq_no, artist_name, "cc_twosteps.pkl", restart_snapshot = restart_snapshot )
+
+    else: 
+        logging.info("<<<<< The program STARTED >>>>>>")
+        for artist_seq_no, artist_name in enumerate(ARTIST_NAMES):
+            logging.info("********* Processing the artist '{}', artist seq no is {} *********".format(artist_name, artist_seq_no))
+            if artist_seq_no < START_ARTIST_INDEX or artist_seq_no > END_ARTIST_INDEX:
+                logging.warning("The artist seq no {seq_no} is out of the range [{start}, {end}], skipped...".format(seq_no=artist_seq_no, start=START_ARTIST_INDEX, end=END_ARTIST_INDEX))
+            else: 
+                process_one_artist(artist_seq_no, artist_name, "cc_twosteps.pkl" )
+
 
 if __name__ == "__main__":
     main()

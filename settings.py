@@ -11,15 +11,15 @@ PLATFORMS = ('netease_max', 'kugou')
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
 
-ARTIST_NAMES = [  "Thomas Bergersen",  "Nick Phoenix", "Two Steps From Hell"]
+ARTIST_NAMES = [  "Thomas Bergersen", "Two Steps From Hell", "Nick Phoenix",]
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_ARTIST_INDEX = 0 # specfiy the start artist index. This index is INCLUDED
-START_DATA_FEED_IDX = 10 # this index will be INCLUDED 
+START_DATA_FEED_IDX =0 # this index will be INCLUDED 
 
 # default 99999 
 END_ARTIST_INDEX = 1 # specfiy when the process will be stopped
-END_DATA_FEED_IDX = 20 # this index will INCLUDED in the processing 
+END_DATA_FEED_IDX = 9999 # this index will INCLUDED in the processing 
 
 ##############################################################
 # the column mapping from query result to the pc_columns

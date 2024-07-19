@@ -13,10 +13,10 @@ class DatabaseQueryException(Exception):
     pass
 
 QUERY_RETRY_CNT = 3
-SLEEP_TIME = 60
+SLEEP_TIME = 30
 
 keepalive_kwargs = {
-    "keepalives": 1,
+    "keepalives": 2,
     "keepalives_idle": 30,
     "keepalives_interval": 5,
     "keepalives_count": 5,
