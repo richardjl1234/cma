@@ -53,7 +53,6 @@ ConnParams = namedtuple('ConnParams', ['host', 'port', 'database', 'user', 'pass
 #    2. database connection
 # output: 
 #     dataframe
-@retry(num_retries=QUERY_RETRY_CNT)
 def execute_sql_query(sql, conn):
     with conn.cursor() as cursor:
         cursor.execute(sql)
@@ -61,6 +60,13 @@ def execute_sql_query(sql, conn):
         column_names = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(result, columns=column_names)
         return df
+
+
+# when the query is retriable, we need to provide the conn_params instead of conn
+@retry(num_retries=QUERY_RETRY_CNT)
+def execute_sql_query_retriable(sql, conn_params):
+    with DatabaseConnection(conn_params) as conn:
+        return execute_sql_query(sql, conn)
 
 # context manager to connect to the database
 # support the with statement

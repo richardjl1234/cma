@@ -10,7 +10,7 @@ import pandas as pd
 # TODO, the SKIP_ARTIST, STOP_ARTIST need to be utilized 
 from settings import LOG_PATH, OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, START_DATA_FEED_IDX, START_ARTIST_INDEX, END_ARTIST_INDEX, END_DATA_FEED_IDX, ARTIST_NAMES, LOG_LEVEL
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
-from modules.rds_access import execute_sql_query, DatabaseConnection, DatabaseQueryException
+from modules.rds_access import execute_sql_query_retriable, DatabaseQueryException
 
 from modules.common import timeit
 from collections import namedtuple
@@ -18,6 +18,7 @@ from modules.pc_platform import clean_song_data
 from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_COLS, PLATFORM_COLS
 
 
+DataFeed = namedtuple("DataFeed", ['artist_seq_no', 'artist_name', 'platform', 'song_name', 'album_names'])
 log_name = LOG_PATH / 'artist_process.log'
 # setup the logging to output the log to console and log file. 
 logging.basicConfig(level=LOG_LEVEL,
@@ -83,18 +84,18 @@ def get_platform_song_data(platform, song_name):
     conn_param = get_conn_params(platform)
 
     # run the query to get the data based on the song name
-    with DatabaseConnection(conn_param) as conn:
-        df_platform_song_raw = execute_sql_query(sql, conn )
+    df_platform_song_raw = execute_sql_query_retriable(sql, conn_param)
 
-        if df_platform_song_raw is None: 
-            logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
-            raise DatabaseQueryException
+    if df_platform_song_raw is None: 
+        logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
+        raise DatabaseQueryException
 
-        if df_platform_song_raw.empty: 
-            logging.warning("No rows returned for song name '{song_name}' from the platform '{platform}'".format(song_name=song_name, platform= platform))
-            return pd.DataFrame()
-        logging.info("{count} rows returned based on the song name '{song_name}' for the platform '{platform}'".format(
-                count = df_platform_song_raw.shape[0], song_name=song_name, platform = platform))
+    if df_platform_song_raw.empty: 
+        logging.warning("No rows returned for song name '{song_name}' from the platform '{platform}'".format(song_name=song_name, platform= platform))
+        return pd.DataFrame()
+    logging.info("{count} rows returned based on the song name '{song_name}' for the platform '{platform}'".format(
+            count = df_platform_song_raw.shape[0], song_name=song_name, platform = platform))
+
     return df_platform_song_raw
 
 def clean_refine_platform_song_data(data_feed):
@@ -151,10 +152,11 @@ def clean_refine_platform_song_data(data_feed):
     return df_platform_cleaned_song 
 
 def process_one_artist(artist_seq_no, artist_name, client_statement_file): 
+    df_platform_concat_dict = {p: pd.DataFrame()  for p in PLATFORMS}
+
     ############################################################################ 
     # get the singer statement information from the client statement excel sheet
     df_client_singer = get_artist_statement(artist_name, client_statement_file)
-
 
     ########################################################################## 
     # get the disctict song names from the df_client_singer
@@ -181,13 +183,11 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
     logging.debug("The songs names are: {}".format('\n'.join(song_names)))
 
     # create the generator to generate the platform and song name
-    DataFeed = namedtuple("DataFeed", ['artist_seq_no', 'artist_name', 'platform', 'song_name', 'album_names'])
     data_feeds = [DataFeed(artist_seq_no, artist_name, platform, song_name, album_names_dict.get(song_name, '')) 
                       for song_name in song_names if song_name.strip() !='' 
                       for platform in PLATFORMS ]
 
     # data_feed = next(data_feeds)
-    df_platform_concated = pd.DataFrame()
     for data_feed_seq_no, data_feed in enumerate(data_feeds): 
         logging.info("****** Current artist seq is {artist_seq_no}, data feed seq is {data_feed_seq_no}, ".format(
             artist_seq_no = data_feed.artist_seq_no, data_feed_seq_no=data_feed_seq_no))
@@ -207,13 +207,17 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
         try: 
             df_platform_cleaned_song= clean_refine_platform_song_data(data_feed)
         except DatabaseQueryException: 
-            logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
-            platform_partial_concated_file_name = OUTPUT_PATH / "{artist_name}_{platform}_partial_concated_{}.pkl".format(
-                artist_name = data_feed.artist_name, platform = data_feed.platform)
+            for platform in PLATFORMS:
+                platform_partial_concated_file_name = OUTPUT_PATH / "{artist_index}_{artist_name}_{platform}_partial_concated_ending_data_feed_idx_(non_included)_{data_feed_seq}.pkl".format(
+                    artist_name = data_feed.artist_name, platform = platform, data_feed_seq = data_feed_seq_no, artist_index=data_feed.artist_seq_no)
+                logging.info("The platform {} data has been stored in the file {}".format(platform, platform_partial_concated_file_name))
 
-            logging.info("The current platform data has been stored in the file {}".format(platform_partial_concated_file_name))
-            df_platform_concated.to_pickle(platform_partial_concated_file_name)
-            raise DatabaseQueryException
+                df_platform_concat_dict[platform].to_pickle(platform_partial_concated_file_name)
+
+            logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
+            logging.error("^^^^^^^ The process stopped at artist no {}, artist name {}, data feed seq {}".format(
+                data_feed.artist_seq_no, data_feed.artist_name, data_feed_seq_no))
+            raise DatabaseQueryException  # early exit, and save the partial result file to pickle file
     
         ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
         if LOG_LEVEL == logging.DEBUG:
@@ -222,25 +226,33 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file):
                 platform= data_feed.platform, 
                 song_name = data_feed.song_name))
 
-        df_platform_concated = pd.concat([df_platform_concated, df_platform_cleaned_song])
+        df_platform_concat_dict[data_feed.platform] = pd.concat([df_platform_concat_dict[data_feed.platform], df_platform_cleaned_song])
 
     
     # filter the columns for dataframe df_client_singer and df_platform, using CLIENT_COLS and PLATFORM_COLS
     df_client_singer = df_client_singer.loc[:, CLIENT_COLS]
-    df_platform_concated =  df_platform_concated.loc[:, PLATFORM_COLS]
+
+    for platform in PLATFORMS: 
+        df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
+
+    df_platform_concat_all = pd.concat([df_platform_concat_dict.values()])
 
 
-    df_client_singer, df_platform_concated = preprocess_data(df_client_singer, df_platform_concated) 
+    df_client_singer, df_platform_concat_all = preprocess_data(df_client_singer, df_platform_concat_all ) 
 
     ## when log_level is debug, then output the file to debug folder 
     if LOG_LEVEL == logging.DEBUG:
-        df_platform_concated.to_csv(OUTPUT_PATH/ "debug"/ "PLATFORM_{}.csv".format('_'.join(artist_name.split())))
+        df_platform_concat_all.to_csv(OUTPUT_PATH/ "debug"/ "{}_{}.csv".format('_'.join(data_feed.platform, artist_name.split())))
         df_client_singer.to_csv(OUTPUT_PATH/ "debug" / "CLIENT_{}.csv".format('_'.join(artist_name.split())))
 
     # matched_df, unmatched_df = match_tracks(client_df, platform_df)
     # save_to_excel(matched_df, unmatched_df, output_path)
 
 def main():
+    ## TODO need to be able to resume the data from the pickle file which have already been processed
+    ## TODO need to be able to resume the data from the pickle file which have already been processed
+    ## TODO need to be able to resume the data from the pickle file which have already been processed
+    ## TODO need to be able to resume the data from the pickle file which have already been processed
     logging.info("<<<<< The program started >>>>>>")
     for artist_seq_no, artist_name in enumerate(ARTIST_NAMES):
         logging.info("********* Processing the artist '{}', artist seq no is {} *********".format(artist_name, artist_seq_no))
