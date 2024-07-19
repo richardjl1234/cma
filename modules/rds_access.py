@@ -5,6 +5,15 @@ import psycopg2
 import pandas as pd
 from collections import namedtuple
 import logging
+import time
+
+# create a database exception class, with erorr message xxxx
+
+class DatabaseQueryException(Exception):
+    pass
+
+QUERY_RETRY_CNT = 3
+SLEEP_TIME = 60
 
 keepalive_kwargs = {
     "keepalives": 1,
@@ -13,9 +22,25 @@ keepalive_kwargs = {
     "keepalives_count": 5,
 }
 
+# add the retry decorator so that the function will retry N times 
+def retry(num_retries):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            for _ in range(num_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    logging.error(f"Error executing {func.__name__}: {e}, sleep for {SLEEP_TIME} secords and retry...")
+                    # Now sleep for 60 seconds
+                    time.sleep(SLEEP_TIME)
+                    continue
+            logging.error(f"Maximum number of retries ({num_retries}) exceeded for {func.__name__}")
+            raise DatabaseQueryException
+        return wrapper
+    return decorator
+
+
 # define a customized class DatabaseQueryException
-class DatabaseQueryException(Exception):
-    pass
 
 
 # define a namedtuple for db connection parameters
@@ -28,17 +53,14 @@ ConnParams = namedtuple('ConnParams', ['host', 'port', 'database', 'user', 'pass
 #    2. database connection
 # output: 
 #     dataframe
+@retry(num_retries=QUERY_RETRY_CNT)
 def execute_sql_query(sql, conn):
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(sql)
-            result = cursor.fetchall()
-            column_names = [desc[0] for desc in cursor.description]
-            df = pd.DataFrame(result, columns=column_names)
-            return df
-    except (Exception, psycopg2.Error) as error:
-        logging.error("Error while executing SQL query:", error)
-        return None
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        result = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(result, columns=column_names)
+        return df
 
 # context manager to connect to the database
 # support the with statement

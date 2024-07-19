@@ -22,13 +22,13 @@ def get_conn_params(platform):
 
 
 # This is useful when we need to resume the process from the previous aborted process 
-# TODO, the start and stop logic need to be implemented. 
-START_ARTIST_INDEX = 0 # specfiy how many artist to be skipped
-END_ARTIST_INDEX = 99999 # specfiy when the process will be stopped
+START_ARTIST_INDEX = 0 # specfiy the start artist index. This index is INCLUDED
+START_DATA_FEED_IDX = 0 # this index will be INCLUDED 
 
-# define the data feed index start and end. (follow the convention of python list)
-START_DATA_FEED_IDX = 0 # this index will be included 
-END_DATA_FEED_IDX = 4 # this index will not be include in the processing 
+# default 99999 
+END_ARTIST_INDEX = 0 # specfiy when the process will be stopped
+END_DATA_FEED_IDX = 1 # this index will INCLUDED in the processing 
+
 
 ##############################################################
 # the column mapping from query result to the pc_columns

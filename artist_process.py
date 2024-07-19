@@ -150,10 +150,9 @@ def clean_refine_platform_song_data(data_feed):
 
     return df_platform_cleaned_song 
 
-def main(artist_name, client_statement_file): 
+def process_one_artist(artist_seq_no, artist_name, client_statement_file): 
     ############################################################################ 
     # get the singer statement information from the client statement excel sheet
-    logging.info("----- Processing the artist '{}'".format(artist_name))
     df_client_singer = get_artist_statement(artist_name, client_statement_file)
 
 
@@ -182,26 +181,39 @@ def main(artist_name, client_statement_file):
     logging.debug("The songs names are: {}".format('\n'.join(song_names)))
 
     # create the generator to generate the platform and song name
-    DataFeed = namedtuple("DataFeed", ['artist_name', 'platform', 'song_name', 'album_names'])
-    data_feeds = [DataFeed(artist_name, platform, song_name, album_names_dict.get(song_name, '')) 
+    DataFeed = namedtuple("DataFeed", ['artist_seq_no', 'artist_name', 'platform', 'song_name', 'album_names'])
+    data_feeds = [DataFeed(artist_seq_no, artist_name, platform, song_name, album_names_dict.get(song_name, '')) 
                       for song_name in song_names if song_name.strip() !='' 
                       for platform in PLATFORMS ]
 
     # data_feed = next(data_feeds)
     df_platform_concated = pd.DataFrame()
-    for seq_no, data_feed in enumerate(data_feeds): 
-        logging.info("****** Current seq is {seq_no}, ".format(seq_no=seq_no))
+    for data_feed_seq_no, data_feed in enumerate(data_feeds): 
+        logging.info("****** Current artist seq is {artist_seq_no}, data feed seq is {data_feed_seq_no}, ".format(
+            artist_seq_no = data_feed.artist_seq_no, data_feed_seq_no=data_feed_seq_no))
         logging.debug("======The data feed is: {}".format(data_feed))
-        if seq_no < START_DATA_FEED_IDX: 
-            logging.warning("The start index is {start}, current seq number is {seq_no}, skip to next data feed....".format(start = START_DATA_FEED_IDX, seq_no=seq_no))
+
+        if data_feed_seq_no < START_DATA_FEED_IDX and artist_seq_no <= START_ARTIST_INDEX: 
+            logging.warning("The start data feed index is {start}, current data feed seq is {seq_no}, skipped ....".format(start = START_DATA_FEED_IDX, seq_no=data_feed_seq_no))
             continue
 
-        if seq_no >= END_DATA_FEED_IDX: 
-            logging.warning("The end index value is {end}, current seq number is {seq_no}, Now stop the iteration....".format(end = END_DATA_FEED_IDX, seq_no=seq_no))
+        if data_feed_seq_no > END_DATA_FEED_IDX and artist_seq_no >= END_ARTIST_INDEX: 
+            logging.warning("The end index value is {end}, current seq number is {seq_no}, Now stop the iteration....".format(end = END_DATA_FEED_IDX, seq_no=data_feed_seq_no))
             break
 
 
-        df_platform_cleaned_song= clean_refine_platform_song_data(data_feed)
+        ####################################################################################################################
+        # when some problem happens, the patially concated platform data for the artist will be storted in the pickle file
+        try: 
+            df_platform_cleaned_song= clean_refine_platform_song_data(data_feed)
+        except DatabaseQueryException: 
+            logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
+            platform_partial_concated_file_name = OUTPUT_PATH / "{artist_name}_{platform}_partial_concated_{}.pkl".format(
+                artist_name = data_feed.artist_name, platform = data_feed.platform)
+
+            logging.info("The current platform data has been stored in the file {}".format(platform_partial_concated_file_name))
+            df_platform_concated.to_pickle(platform_partial_concated_file_name)
+            raise DatabaseQueryException
     
         ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
         if LOG_LEVEL == logging.DEBUG:
@@ -228,8 +240,15 @@ def main(artist_name, client_statement_file):
     # matched_df, unmatched_df = match_tracks(client_df, platform_df)
     # save_to_excel(matched_df, unmatched_df, output_path)
 
-if __name__ == "__main__":
+def main():
     logging.info("<<<<< The program started >>>>>>")
-    for artist_name in ARTIST_NAMES:
-        main(artist_name, "cc_twosteps.pkl")
+    for artist_seq_no, artist_name in enumerate(ARTIST_NAMES):
+        logging.info("********* Processing the artist '{}', artist seq no is {} *********".format(artist_name, artist_seq_no))
+        if artist_seq_no < START_ARTIST_INDEX or artist_seq_no > END_ARTIST_INDEX:
+            logging.warning("The artist seq no {seq_no} is out of the range [{start}, {end}], skipped...".format(seq_no=artist_seq_no, start=START_ARTIST_INDEX, end=END_ARTIST_INDEX))
+        else: 
+            process_one_artist(artist_seq_no, artist_name, "cc_twosteps.pkl")
+
+if __name__ == "__main__":
+    main()
     
