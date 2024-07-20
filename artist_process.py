@@ -30,6 +30,17 @@ logging.basicConfig(level=LOG_LEVEL,
                     )
 
 @timeit
+def take_snapshot(artist_seq_no,data_feed_seq_no, df_platform_concat_dict):
+    snapshot_filename = OUTPUT_PATH / "snapshot.pkl"
+    # write the snapshot to pick file
+    with open(snapshot_filename, 'wb') as f: 
+        snapshot = (artist_seq_no, data_feed_seq_no, df_platform_concat_dict)
+        pickle.dump(snapshot, f)
+
+    logging.info("^^^^^^^ The snapshot data has been stored in the file {}, artist seq no is {}, data feed seq is {}".format(
+        str(snapshot_filename), artist_seq_no, data_feed_seq_no))
+
+@timeit
 def get_artist_statement(artist_name, client_statement_file, input_folder= "input_data")   :
     ########################################################################## 
     # read the file_name into data frame
@@ -209,6 +220,7 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
 
     # data_feed = next(data_feeds)
     for data_feed_seq_no, data_feed in enumerate(data_feeds): 
+
         logging.info("****** Current artist seq is {artist_seq_no}, data feed seq is {data_feed_seq_no} \n".format(
             artist_seq_no = data_feed.artist_seq_no, data_feed_seq_no=data_feed_seq_no))
         logging.debug("======The data feed is: {}".format(data_feed))
@@ -221,21 +233,15 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
             logging.warning("The end index value is {end}, current seq number is {seq_no}, Now stop the iteration....".format(end = END_DATA_FEED_IDX, seq_no=data_feed_seq_no))
             break
 
+        ####################################################################################################################
+        # when the dict is created, take the snapshot to save the progress in case the long run program is killed
+        take_snapshot(data_feed.artist_seq_no, data_feed_seq_no, df_platform_concat_dict)
 
         ####################################################################################################################
         # when some problem happens, the patially concated platform data for the artist will be storted in the pickle file
         try: 
             df_platform_cleaned_song= clean_refine_platform_song_data(data_feed)
         except DatabaseQueryException: 
-            snapshot_filename = OUTPUT_PATH / "snapshot.pkl"
-            # write the snapshot to pick file
-            with open(snapshot_filename, 'wb') as f: 
-                snapshot = (data_feed.artist_seq_no, data_feed_seq_no, df_platform_concat_dict)
-                pickle.dump(snapshot, f)
-
-            logging.error("ERROR WHEN QUERY THE DATA, PROGRAM ABORTED!")
-            logging.error("^^^^^^^ The process stopped at artist no {}, artist name {}, data feed seq {}".format(data_feed.artist_seq_no, data_feed.artist_name, data_feed_seq_no))
-            logging.info("^^^^^^^ The snapshot data has been stored in the file {}".format(str(snapshot_filename)))
             raise DatabaseQueryException  # early exit, and save the partial result file to pickle file
     
         ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
@@ -246,6 +252,7 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
                 song_name = data_feed.song_name))
 
         df_platform_concat_dict[data_feed.platform] = pd.concat([df_platform_concat_dict[data_feed.platform], df_platform_cleaned_song])
+
 
     
     # filter the columns for dataframe df_client_singer and df_platform, using CLIENT_COLS and PLATFORM_COLS
@@ -260,13 +267,21 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
     df_client_singer, df_platform_concat_all = preprocess_data(df_client_singer, df_platform_concat_all ) 
 
     ## when log_level is debug, then output the file to debug folder 
-    if LOG_LEVEL == logging.DEBUG:
+    if LOG_LEVEL == logging.INFO:
         df_platform_concat_all.to_csv(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.csv".format('_'.join( artist_name.split())))
         df_client_singer.to_csv(OUTPUT_PATH/ "debug" / "CLIENT_{}.csv".format('_'.join(artist_name.split())))
+        logging.info("The CLIENT and PLATFORM_ALL files have been outputted to the debug folder")
+        # delete the snapshot file once the result is created 
+        
+
 
     # TODO un-comment the following 2 lines in the future
+    # TODO, 
     # matched_df, unmatched_df = match_tracks(client_df, platform_df)
     # save_to_excel(matched_df, unmatched_df, output_path)
+    # os.rename(OUTPUT_PATH / "snapshot.pkl", OUTPUT_PATH / "snapshot_{}.pkl".format('_'.join(artist_name.split())))   
+    os.remove(OUTPUT_PATH / "snapshot.pkl" )   
+    logging.info("============== The current artist '{}' is processed successfully. The snapshot file has been removed\n\n".format(artist_name))
 
 def main():
     ## Resume the data from the pickle file which have already been processed, the pickle file name is snapshot.pkl
