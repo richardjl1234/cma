@@ -2,16 +2,18 @@ from pathlib import Path
 from modules.rds_access import ConnParams
 import os
 import logging
+from collections import namedtuple
 
 LOG_LEVEL=logging.INFO
 
 # TODO, the platform qqmusicv2 need to added, but now the performance is not good, so it is not ready to be added
-PLATFORMS = ('netease_max', 'kugou')
+# PLATFORMS = ('netease_max', 'kugou')
+PLATFORMS = ( 'kugou', )
 
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
 
-ARTIST_NAMES = [  "Thomas Bergersen",  "Nick Phoenix","Two Steps From Hell",]
+ARTIST_NAMES = [ "Two Steps From Hell", "Thomas Bergersen",  "Nick Phoenix",]
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_ARTIST_INDEX = 0 # specfiy the start artist index. This index is INCLUDED
@@ -19,7 +21,7 @@ START_DATA_FEED_IDX =0 # this index will be INCLUDED
 
 # default 99999 
 END_ARTIST_INDEX = 0 # specfiy when the process will be stopped
-END_DATA_FEED_IDX = 10 # this index will INCLUDED in the processing 
+END_DATA_FEED_IDX = 2 # this index will INCLUDED in the processing 
 
 ##############################################################
 # the column mapping from query result to the pc_columns
@@ -66,3 +68,6 @@ def get_conn_params(platform):
         raise ValueError(f"invalid platform {platform}") 
         return None
     return ConnParams(os.environ["POSTGRE_HOST"], 5432,platform,  os.environ["POSTGRE_USER"], os.environ["POSTGRE_PWD"] ) 
+
+##############################################################
+DataFeed = namedtuple("DataFeed", ['artist_seq_no', 'artist_name', 'platform', 'song_name', 'album_names'])

@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 import pandas as pd
 # TODO, the SKIP_ARTIST, STOP_ARTIST need to be utilized 
-from settings import LOG_PATH, OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, START_DATA_FEED_IDX, START_ARTIST_INDEX, END_ARTIST_INDEX, END_DATA_FEED_IDX, ARTIST_NAMES, LOG_LEVEL
+from settings import LOG_PATH, OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, START_DATA_FEED_IDX, START_ARTIST_INDEX, END_ARTIST_INDEX, END_DATA_FEED_IDX, ARTIST_NAMES, LOG_LEVEL, DataFeed
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
 from modules.rds_access import execute_sql_query_retriable, DatabaseQueryException
 
@@ -19,7 +19,6 @@ from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_CO
 import pickle
 
 
-DataFeed = namedtuple("DataFeed", ['artist_seq_no', 'artist_name', 'platform', 'song_name', 'album_names'])
 log_name = LOG_PATH / 'artist_process.log'
 # setup the logging to output the log to console and log file. 
 logging.basicConfig(level=LOG_LEVEL,
@@ -205,9 +204,13 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
     # TODO move the el dorado to the first element for testing
     # TODO move the el dorado to the first element for testing
     # TODO move the el dorado to the first element for testing
-    if "el dorado" in song_names:
-        song_names.remove("el dorado")
-        song_names = ["el dorado"] + song_names
+
+    if "Victory" in song_names:
+        song_names.remove("Victory")
+        song_names = ["Victory"] + song_names
+    # if "el dorado" in song_names:
+    #     song_names.remove("el dorado")
+    #     song_names = ["el dorado"] + song_names
 
 
     logging.info("There are {} unique songs for artist '{}'".format(len(song_names), artist_name))
@@ -246,7 +249,7 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
     
         ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
         if LOG_LEVEL == logging.DEBUG:
-            df_platform_cleaned_song.to_csv(OUTPUT_PATH/ "debug" / "{artist_name}-{platform}-{song_name}.csv".format(
+            df_platform_cleaned_song.to_pickle(OUTPUT_PATH/ "debug" / "{artist_name}-{platform}-{song_name}.pkl".format(
                 artist_name= data_feed.artist_name, 
                 platform= data_feed.platform, 
                 song_name = data_feed.song_name))
@@ -268,8 +271,8 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
 
     ## when log_level is debug, then output the file to debug folder 
     if LOG_LEVEL == logging.INFO:
-        df_platform_concat_all.to_csv(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.csv".format('_'.join( artist_name.split())))
-        df_client_singer.to_csv(OUTPUT_PATH/ "debug" / "CLIENT_{}.csv".format('_'.join(artist_name.split())))
+        df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format('_'.join( artist_name.split())))
+        df_client_singer.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format('_'.join(artist_name.split())))
         logging.info("The CLIENT and PLATFORM_ALL files have been outputted to the debug folder")
         # delete the snapshot file once the result is created 
         
