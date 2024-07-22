@@ -13,7 +13,7 @@ where song_name ilike '%{song_name}%'
 "netease_max": """
 SELECT album_id, song_id, song_name, artist_id, copyright_id, deprecated_artist_name, artist_ids,
 comment_count, audit_songs.artist_array, album_name, release_date, company, song_array
-FROM audit_songs
+FROM audit_songs_lei
 INNER JOIN audit_albums USING (album_id)
 where song_name ilike '%{song_name}%'
 """, 

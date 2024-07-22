@@ -18,6 +18,7 @@ from modules.pc_platform import clean_song_data, refine_logics, RefineLogicFuncN
 from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_COLS, PLATFORM_COLS
 import pickle
 
+pd.options.mode.chained_assignment = None
 
 log_name = LOG_PATH / 'artist_process.log'
 # setup the logging to output the log to console and log file. 
@@ -109,7 +110,7 @@ def get_platform_song_data(platform, song_name):
 
     return df_platform_song_raw
 
-def clean_refine_platform_song_data(data_feed):
+def retrieve_clean_refine_platform_song_data(data_feed):
     '''
     This function is to get the data from the platform database based on the song_name (ilike), 
     1. call the function get_platform_song_data to get the raw data from the platform database
@@ -136,7 +137,7 @@ def clean_refine_platform_song_data(data_feed):
     # unpack the data feed
     artist_seq_no, artist_name, platform, song_name,  album_names = data_feed
 
-    logging.info("Start to clean and refine the platform data for artist seq {} artist '{}' song '{}' on the platform '{}, album names are {}'".format(
+    logging.info("Start to retrieve, clean and refine the platform data for artist seq {} artist '{}' song '{}' on the platform '{}, album names are {}'".format(
         artist_seq_no, artist_name, song_name, platform, album_names))
 
     df_platform_song = get_platform_song_data(platform=platform, song_name=song_name)
@@ -144,6 +145,19 @@ def clean_refine_platform_song_data(data_feed):
     if df_platform_song.empty: 
         return df_platform_song 
 
+    # replace the column name to the standard column name based on the column mapping information
+    df_platform_song = df_platform_song.rename(columns=COLUMN_MAPPING[platform])
+
+    # do the clean process for the platform data, add the columns pc_xxxxx
+    df_platform_cleaned_song = clean_song_data(df_platform_song)
+
+    ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
+    if LOG_LEVEL == logging.DEBUG:
+        df_platform_cleaned_song.to_pickle(OUTPUT_PATH/ "debug" / "{artist_name}-{platform}-{song_name}.pkl".format(
+            artist_name= data_feed.artist_name, 
+            platform= data_feed.platform, 
+            song_name = data_feed.song_name))
+    
     ######################################################################
     # REFINEMENT LOGIC
     # now process the data and refine it for every specific platform 
@@ -152,29 +166,13 @@ def clean_refine_platform_song_data(data_feed):
     refine_logic_func =refine_logics(platform) 
     if refine_logic_func: 
         logging.info("The refine logic function is: {}".format(refine_logic_func.__name__))
-        df_platform_song = refine_logic_func(data_feed, df_platform_song)
-        logging.info("the shape of refined df_platform_song is {}".format(df_platform_song.shape))
+        df_platform_cleaned_song= refine_logic_func(data_feed, df_platform_cleaned_song)
+        logging.info("the shape of refined df_platform_song is {}".format(df_platform_cleaned_song.shape))
     else: 
         raise RefineLogicFuncNotDefined
 
-    # replace the column name to the standard column name based on the column mapping information
-    df_platform_song = df_platform_song.rename(columns=COLUMN_MAPPING[platform])
-
-    # do the clean process for the platform data
-    df_platform_cleaned_song = clean_song_data(df_platform_song)
-    
     # reorg the columns in the cleaned_df_platform_song dataframe, the columns name should be sorted in asceding order
     df_platform_cleaned_song = df_platform_cleaned_song.loc[:, df_platform_cleaned_song.columns.sort_values()]
-    
-    ##################################################################################
-    # now process the platform rows so that only the rows related to the songs will be kept
-    # TODO need to add the logic to refine the rows in the 
-    # TODO need to add the logic to refine the rows in the 
-    # TODO need to add the logic to refine the rows in the 
-    # TODO need to add the logic to refine the rows in the 
-    # TODO need to add the logic to refine the rows in the 
-    df_platform_cleaned_song['refine_process_comment'] = ''
-    df_platform_cleaned_song['refine_similarity'] = ''
 
     return df_platform_cleaned_song 
 
@@ -201,13 +199,9 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
                          for song_name in song_names}
     logging.debug("The album names dict is: {}".format(album_names_dict))
 
-    # TODO move the el dorado to the first element for testing
-    # TODO move the el dorado to the first element for testing
-    # TODO move the el dorado to the first element for testing
-
-    if "Victory" in song_names:
-        song_names.remove("Victory")
-        song_names = ["Victory"] + song_names
+    # if "Victory" in song_names:
+    #     song_names.remove("Victory")
+    #     song_names = ["Victory"] + song_names
     # if "el dorado" in song_names:
     #     song_names.remove("el dorado")
     #     song_names = ["el dorado"] + song_names
@@ -243,16 +237,11 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
         ####################################################################################################################
         # when some problem happens, the patially concated platform data for the artist will be storted in the pickle file
         try: 
-            df_platform_cleaned_song= clean_refine_platform_song_data(data_feed)
+            df_platform_cleaned_song= retrieve_clean_refine_platform_song_data(data_feed)
+            logging.debug("The shape of df_platform_cleaned_song is {} after calling retrieve_clean_refine_platform_song_data".format(df_platform_cleaned_song.shape))
         except DatabaseQueryException: 
             raise DatabaseQueryException  # early exit, and save the partial result file to pickle file
     
-        ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
-        if LOG_LEVEL == logging.DEBUG:
-            df_platform_cleaned_song.to_pickle(OUTPUT_PATH/ "debug" / "{artist_name}-{platform}-{song_name}.pkl".format(
-                artist_name= data_feed.artist_name, 
-                platform= data_feed.platform, 
-                song_name = data_feed.song_name))
 
         df_platform_concat_dict[data_feed.platform] = pd.concat([df_platform_concat_dict[data_feed.platform], df_platform_cleaned_song])
 
@@ -262,7 +251,8 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
     df_client_singer = df_client_singer.loc[:, CLIENT_COLS]
 
     for platform in PLATFORMS: 
-        df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
+        if not df_platform_concat_dict[platform].empty:
+            df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
 
     df_platform_concat_all = pd.concat(df_platform_concat_dict.values())
 
@@ -270,7 +260,7 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
     df_client_singer, df_platform_concat_all = preprocess_data(df_client_singer, df_platform_concat_all ) 
 
     ## when log_level is debug, then output the file to debug folder 
-    if LOG_LEVEL == logging.INFO:
+    if LOG_LEVEL == logging.DEBUG:
         df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format('_'.join( artist_name.split())))
         df_client_singer.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format('_'.join(artist_name.split())))
         logging.info("The CLIENT and PLATFORM_ALL files have been outputted to the debug folder")

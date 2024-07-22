@@ -4,7 +4,7 @@ import os
 import logging
 from collections import namedtuple
 
-LOG_LEVEL=logging.INFO
+LOG_LEVEL=logging.DEBUG
 
 # TODO, the platform qqmusicv2 need to added, but now the performance is not good, so it is not ready to be added
 # PLATFORMS = ('netease_max', 'kugou')

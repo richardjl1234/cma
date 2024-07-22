@@ -9,6 +9,8 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from settings import DataFeed
 
+pd.options.mode.chained_assignment = None
+
 class RefineLogicFuncNotDefined(Exception):
    pass 
 
@@ -160,14 +162,13 @@ def refine_logic_netease_max(data_feed: DataFeed, df_platform_song):
 
 # TODO refine logic for df_platform_song_raw
 def refine_logic_kugou(data_feed: DataFeed, df_platform_song:pd.DataFrame ) -> pd.DataFrame:
+    logging.info("the shape of the input dataframe is {}".format(df_platform_song.shape))
     
-    df_platform_song['pc_track'] = df_platform_song['p_track'].fillna('')
+    df_platform_song['pc_track'] = df_platform_song['pc_track'].fillna('')
     df_platform_song['p_album'] = df_platform_song['p_album'].fillna('')
     df_platform_song['pc_artist'] = df_platform_song['pc_artist'].fillna('')
 
     # define the filters
-    def filter_song_name(row, song_name):
-        return row['pc_track'].lower().strip() == song_name.lower().strip() 
 
     def filter_artist_names(row, artist_names):
         return any(name.lower().strip() == row['pc_artist'].lower().strip() for name in artist_names)
@@ -175,65 +176,104 @@ def refine_logic_kugou(data_feed: DataFeed, df_platform_song:pd.DataFrame ) -> p
     def filter_album_names(row, album_names):
         return any(name.lower().strip() == row['p_album'].lower().strip() for name in album_names)
 
+    def add_refine_comment(row, album_names, artist_names):
+        text = ''
+        if filter_album_names(row, album_names):
+            text += 'Album name exact match, '
+        if filter_artist_names(row, artist_names):
+            text += 'Artist name exact match, '
+
+        return text
+
+    # only return the rows that song_name match, while artist name and album name does not mathch
+    def filter_song_name(row, song_name, album_names, artist_names):
+        if filter_album_names(row, album_names) or filter_artist_names(row, artist_names):
+            return False
+        if row['pc_track'].lower().strip() == song_name.lower().strip(): 
+            return True
+        else: 
+            return False
+            
+
     # unpack the data_feed input
     _, artist_name, _, song_name, album_names = data_feed
     artist_names = [artist_name]
 
-    processed_artists, precessed_albums = [], []
-    artist_names = set(map(lambda x: x.lower().strip(), artist_names))
-    album_names = set(map(lambda x: x.lower().strip(), album_names))
+    processed_artists, processed_albums = set(), set()  # the set which have been processed
+    artist_names = set(map(lambda x: x.lower().strip(), artist_names)) # the names of artist to be process in the next iteration 
+    album_names = set(map(lambda x: x.lower().strip(), album_names)) # the name of the albums to be processed in the next iteration
 
     logging.info(f"Start iteratively filtering by {song_name},  {artist_names}, {album_names}")
-    df_platform_song_refined = pd.DataFrame()
+    df_platform_song_refined_level1 = pd.DataFrame()
 
     # print the information of processed artists and albums
-    logging.info(f"Processed artists: {processed_artists}, processed albums: {precessed_albums}")
+    logging.info(f"Processed artists: {processed_artists}, processed albums: {processed_albums}")
     # print the information of artist_names and album_names
-    logging.info(f"Artists to be processed: {artist_names.difference(processed_artists)}, remaining albums: {album_names.difference(precessed_albums)}")  
+    logging.info(f"Artists to be processed: {artist_names.difference(processed_artists)}, remaining albums: {album_names.difference(processed_albums)}")  
 
     iteration_cnt = 0
-    while(processed_artists != artist_names or precessed_albums != album_names):
+    print('--------------------')
+    print(artist_names)
+    print(processed_artists)
+    print(album_names)
+    print(processed_albums)
+    print('--------------------')
+    print(artist_names - processed_artists)
+    print(album_names - processed_albums)
+    print('--------------------')
+
+    while(len(artist_names - processed_artists) != 0  or len(album_names - processed_albums) != 0) :
+        if iteration_cnt > 21: 
+            logging.warning("The iteration count exceeds the threshold 21, break the loop...") 
+            break; 
+
         iteration_cnt += 1  
         logging.info(f"Iteration {iteration_cnt}:")
-
-        # get all the row which the song name matches exactly
-        df1 = df_platform_song.loc[df_platform_song.apply(filter_song_name, axis=1, args=(song_name,))]
-        df1['refine_process_comment'] = 'Song name exact match'
-        df1['refine_similarity'] = 2
-
-        df_platform_song_refined = pd.concat([df_platform_song_refined, df1])
 
         # get all the rows which artist name matches exactly
 
         df2 = df_platform_song.loc[df_platform_song.apply(filter_artist_names, axis=1, args=(artist_names, ))]
-        df2['refine_process_comment'] = 'Artist Name exact match'
-        df2['refine_similarity'] = 1 
-        df_platform_song_refined = pd.concat([df_platform_song_refined, df2])
+        # df2['refine_process_comment'] = df2['refine_process_comment'].apply(lambda x: list(set(x.append('Artist Name exact match'))))
+        df_platform_song_refined_level1 = pd.concat([df_platform_song_refined_level1, df2])
 
         # get all the rows which album name matches exactly
         df3 = df_platform_song.loc[df_platform_song.apply(filter_album_names, axis=1, args=(album_names,))]
-        df3['refine_process_comment'] = 'Album name exact match'
-        df3['refine_similarity'] = 1 
-        df_platform_song_refined = pd.concat([df_platform_song_refined, df3])
-        df_platform_song_refined.drop_duplicates(inplace=True)
+        # df3['refine_process_comment'] = df3['refine_process_comment'].apply(lambda x: list(set(x.append( 'Album name exact match'))))
+        df_platform_song_refined_level1 = pd.concat([df_platform_song_refined_level1, df3])
+        # df_platform_song_refined.drop_duplicates(inplace=True)
+        df_platform_song_refined_level1 = df_platform_song_refined_level1.groupby('p_song_id').first().reset_index(names = ['p_song_id'])
+
+        # df_platform_song_refined = df_platform_song_refined.loc[df_platform_song_refined.astype(str).drop_duplicates().index]
 
         # copy the artist_names, album_names to the processed_artists, precessed_albums to avoid duplicate processing
-        processed_artists = artist_names.copy()
-        precessed_albums = album_names.copy()
+        processed_artists |= artist_names
+        processed_albums |= album_names
 
-        # identify to be processed artist_names and album names
-        artist_names = set(filter(lambda x: x!='', df3['pc_artist'].dropna().str.lower().str.strip().unique().tolist()))
-        album_names = set(filter(lambda x: x!='',df2['p_album'].dropna().str.lower().str.strip().unique().tolist()))
+        # identify to be processed artist_names and album names which need to processed in the next iteration 
+        artist_names = set(filter(lambda x: x!='', df_platform_song_refined_level1['pc_artist'].dropna().str.lower().str.strip().unique().tolist()))
+        album_names = set(filter(lambda x: x!='',df_platform_song_refined_level1['p_album'].dropna().str.lower().str.strip().unique().tolist()))
 
         # print the the information of artist_names and album_names
-        logging.info(f"Identified artists: {artist_names}, identified albums: {album_names}")
+        logging.info(f"Identified artists: {artist_names}, identified albums: {album_names}, they will be processed in next iteration if they have not all processed yet...")
 
         # print the information of processed artists and albums
-        logging.info(f"Processed artists: {processed_artists}, processed albums: {precessed_albums}")
+        logging.info(f"Processed artists: {processed_artists}, processed albums: {processed_albums}")
         
 
     # sort the df_platform_song_refined by refine_similarity and refine_process_comment in descending order
-    df_platform_song_refined.sort_values(by=['refine_similarity'], ascending=[True ], inplace=True)
+    # df_platform_song_refined_level1.sort_values(by=['refine_similarity'], ascending=[True ], inplace=True)
+    df_platform_song_refined_level1['refine_process_comment'] = df_platform_song_refined_level1.apply(add_refine_comment, axis=1, args=(album_names, artist_names, ))
+    df_platform_song_refined_level1['refine_similarity'] = 1
+    logging.info("level 1 refined result is {}".format(df_platform_song_refined_level1.shape))
+
+    print(processed_albums, processed_artists)
+    df_refined_level2 = df_platform_song.loc[df_platform_song.apply(filter_song_name, axis=1, args=(song_name, processed_albums, processed_artists,))]
+    df_refined_level2['refine_process_comment'] = 'song_name exact match, but artist name and album name does not match'
+    df_refined_level2['refine_similarity'] = 2
+    logging.info("level 2 refined result is {}".format(df_refined_level2.shape))
+
+    df_platform_song_refined = pd.concat([df_platform_song_refined_level1, df_refined_level2])
+    
 
     return df_platform_song_refined
 

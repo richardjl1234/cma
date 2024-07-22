@@ -18,8 +18,9 @@ logging.basicConfig(level=logging.DEBUG,
 
 
 file_path = Path("/home/richard/shared/dropArea/upwork/CMA/phase1/output/debug")
-file_name = "Two Steps From Hell-kugou-el dorado.csv"
-df = pd.read_csv(file_path/file_name)
+file_name = "Two Steps From Hell-kugou-el dorado.pkl"
+df = pd.read_pickle(file_path/file_name)
+df.to_csv('temp1.csv', index=False)
 
 albums = ['burn', 'skyworld']
 artist_names  =  ["Two Steps From Hell "]
@@ -50,4 +51,5 @@ data_feed = (1, "Two Steps From Hell ", 'kugou','el dorado', ['burn', 'skyworld'
 df_refined = refine_logic_kugou(data_feed, df)
 
 print(df_refined.shape)
-df_refined.to_excel('temp.xlsx')
+df_refined.to_csv('temp2.csv', index=False)
+# df_refined.to_excel('temp.xlsx')
