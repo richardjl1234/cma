@@ -7,8 +7,8 @@ from collections import namedtuple
 LOG_LEVEL=logging.DEBUG
 
 # TODO, the platform qqmusicv2 need to added, but now the performance is not good, so it is not ready to be added
-# PLATFORMS = ('netease_max', 'kugou')
-PLATFORMS = ( 'kugou', )
+PLATFORMS = ('netease_max', 'kugou')
+#PLATFORMS = ( 'kugou', )
 
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
@@ -21,7 +21,10 @@ START_DATA_FEED_IDX =0 # this index will be INCLUDED
 
 # default 99999 
 END_ARTIST_INDEX = 0 # specfiy when the process will be stopped
-END_DATA_FEED_IDX = 2 # this index will INCLUDED in the processing 
+END_DATA_FEED_IDX = 20 # this index will INCLUDED in the processing 
+
+# include the refine_similarity_level_2 records, level 2 are the rows with exact matching on song name, but does not match on singer name and alblum name
+INCLUDE_SIMILARITY_LEVEL2 = False
 
 ##############################################################
 # the column mapping from query result to the pc_columns

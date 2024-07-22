@@ -14,7 +14,9 @@ from modules.rds_access import execute_sql_query_retriable, DatabaseQueryExcepti
 
 from modules.common import timeit
 from collections import namedtuple
-from modules.pc_platform import clean_song_data, refine_logics, RefineLogicFuncNotDefined
+from modules.pc_platform import clean_song_data
+from modules.refine_platform_song_rows import refine_logics, RefineLogicFuncNotDefined
+
 from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_COLS, PLATFORM_COLS
 import pickle
 
@@ -211,6 +213,11 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
     logging.debug("The songs names are: \n{}\n".format(', '.join(song_names)))
 
     # create the generator to generate the platform and song name
+    # TODO the artist_name in the datafeed must a string which is separated by ,  
+    # TODO the artist_name in the datafeed must a string which is separated by ,  
+    # TODO the artist_name in the datafeed must a string which is separated by ,  
+    # TODO the artist_name in the datafeed must a string which is separated by ,  
+    # TODO the artist_name in the datafeed must a string which is separated by ,  
     data_feeds = [DataFeed(artist_seq_no, artist_name, platform, song_name, album_names_dict.get(song_name, '')) 
                       for song_name in song_names if song_name.strip() !='' 
                       for platform in PLATFORMS ]
