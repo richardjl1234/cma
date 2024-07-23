@@ -4,17 +4,12 @@ import os
 import pandas as pd
 from pathlib import Path
 
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s : %(levelname)s : %(message)s',
-                    handlers=[
-                              logging.StreamHandler()
-                              ]
-                    )
 # Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from settings import DataFeed, INCLUDE_SIMILARITY_LEVEL2
+from settings import DataFeed, INCLUDE_SIMILARITY_LEVEL2, LOG_LEVEL
 
 pd.options.mode.chained_assignment = None
+
 
 class RefineLogicFuncNotDefined(Exception):
    pass 
@@ -284,5 +279,8 @@ def test_netease():
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=LOG_LEVEL,
+                        format='%(asctime)s : %(levelname)s : %(message)s',
+                        handlers=[ logging.StreamHandler() ])
     test_kugou()
     test_netease()

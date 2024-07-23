@@ -10,3 +10,4 @@ def timeit(func):
         logging.info(f'{func.__name__} took {end - start} seconds to execute')
         return result
     return wrapper  
+

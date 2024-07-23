@@ -105,7 +105,7 @@ def match_tracks(client_df, platform_df):
                unmatched.extend(unmatched_rows.to_dict('records'))
 
 
-   logging.info("Matching completed.")
+   logging.info("===== Matching completed.")
    return pd.DataFrame(matched), pd.DataFrame(unmatched)
 
 
@@ -121,7 +121,7 @@ def save_to_excel(matched_df, unmatched_df, output_path):
        # Save unmatched data to 'Matched' sheet starting from row after matched data
        unmatched_df.to_excel(writer, sheet_name='Matched', startrow=matched_df.shape[0]+2, index=False)
       
-   logging.info("📊 Data saved to Excel. Check the output file at:", output_path)
+   logging.info("📊 Data saved to Excel. Check the output file at: {}".format(str(output_path)) )
 
 
 def run_matching_operation():
