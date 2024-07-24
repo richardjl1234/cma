@@ -12,6 +12,7 @@ This application is a standalone music audit program.
 pip install -r requirements.txt
 ```
 1.  Prepare the client statements document, and list of the artists name.
+1.  Create the folder `input_data`, `output` and `log` folder. 
 1.  Setup the database username and password in local environment. When the application is running, it will get the following envionment vaiable value. 
 ```
 POSTGRE_USER=
@@ -33,8 +34,8 @@ LOG_PATH = Path('log')
 
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
 
-# the artist name which to be processed
-ARTIST_NAMES = [  "Thomas Bergersen",  "Nick Phoenix","Two Steps From Hell",]
+INPUT_PATH = "input_data"
+INPUT_FILE = "cc_twosteps.pkl"  # the input file should be in the input_data folder
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_ARTIST_INDEX = 0 # specfiy the start artist index. This index is INCLUDED

@@ -33,44 +33,6 @@ def take_snapshot(artist_seq_no,data_feed_seq_no, df_platform_concat_dict):
         str(snapshot_filename), artist_seq_no, data_feed_seq_no))
 
 @timeit
-def get_artist_statement(artist_name, client_statement_file, input_folder= "input_data")   :
-    ########################################################################## 
-    # read the file_name into data frame
-    logging.info("Read the excel file '{}' to memory...".format(client_statement_file))
-    _, file_ext= os.path.splitext(client_statement_file)
-    print(file_ext)
-
-    input_file_full_path = Path(input_folder) / client_statement_file 
-
-    if file_ext == '.pkl':
-        with open(input_file_full_path, 'rb') as f:
-            df_artists = pickle.load(f)
-    elif file_ext == '.csv':
-        df_artists = pd.read_csv(input_file_full_path)
-    else: 
-        df_artists = pd.read_excel(input_file_full_path)
-
-    logging.info("The dataframe has {} rows".format(df_artists.shape[0]))
-
-    ########################################################################## 
-    # Get the data for the artist name only from the dataframe df_artists, the df_singer is for only one singer
-    logging.info('Start to process the artist: {}'.format(artist_name))
-    artists = df_artists['c_artist'].unique()
-    logging.debug("There are {} rows in the dataframe, the list of the artist name are: {}".format(len(artists), ', '.join(artists)))
-    df_singer = df_artists.loc[df_artists['c_artist'] == artist_name]
-    logging.debug("The column names in the df_singer are:\n {} \n".format(', '.join(df_singer.columns)))
-
-    ########################################################################## 
-    # for those rows which has blank track name, output the report in the output folder
-    # get the disctinct song_name from the df_singer.cc_track column, save to song_names, 
-    df_singer = df_singer
-    rows_empty_track_name = "{}.csv".format(artist_name + "_EMPTY_TRACK_NAME")
-    logging.warning("^^^^ ROWS with EMPTY TRACK NAME are detected for artist '{}', those rows has been save to file '{}' ".format(artist_name, rows_empty_track_name))
-    df_singer.loc[df_singer["cc_track"] == ''].to_csv(OUTPUT_PATH / rows_empty_track_name )
-
-    return df_singer
-
-@timeit
 def get_platform_song_data(platform, song_name): 
     """
     Funtion to get the raw platform data from the platform database, based on the platform name and the song name
@@ -168,7 +130,7 @@ def retrieve_clean_refine_platform_song_data(data_feed):
 
     return df_platform_cleaned_song 
 
-def process_one_artist(artist_seq_no, artist_name, client_statement_file, restart_snapshot = None): 
+def process_one_artist(artist_seq_no, artist_name, df_client_singer, restart_snapshot = None): 
     if restart_snapshot is None: 
         df_platform_concat_dict = {p: pd.DataFrame()  for p in PLATFORMS}
     else: 
@@ -177,7 +139,7 @@ def process_one_artist(artist_seq_no, artist_name, client_statement_file, restar
 
     ############################################################################ 
     # get the singer statement information from the client statement excel sheet
-    df_client_singer = get_artist_statement(artist_name, client_statement_file)
+    # df_client_singer = get_artist_statement(artist_name, client_statement_file)
 
     ########################################################################## 
     # get the disctict song names from the df_client_singer
