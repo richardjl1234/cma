@@ -7,30 +7,30 @@ import pickle
 import logging
 from pathlib import Path
 import pandas as pd
-from settings import  OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, START_DATA_FEED_IDX, START_ARTIST_INDEX, END_ARTIST_INDEX, END_DATA_FEED_IDX,  LOG_LEVEL, DataFeed
+from settings import  OUTPUT_PATH, PLATFORMS, get_conn_params, COLUMN_MAPPING, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, DataFeed
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
 from modules.rds_access import execute_sql_query_retriable, DatabaseQueryException
 
 from modules.common import timeit
 from collections import namedtuple
 from modules.pc_platform import clean_song_data
-from modules.refine_platform_song_rows import refine_logics, RefineLogicFuncNotDefined
+from modules.refine_platform_song_rows import refine_platform_song_rows
 
 from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_COLS, PLATFORM_COLS
 
 pd.options.mode.chained_assignment = None
 
 
-@timeit
-def take_snapshot(artist_seq_no,data_feed_seq_no, df_platform_concat_dict):
-    snapshot_filename = OUTPUT_PATH / "snapshot.pkl"
-    # write the snapshot to pick file
-    with open(snapshot_filename, 'wb') as f: 
-        snapshot = (artist_seq_no, data_feed_seq_no, df_platform_concat_dict)
-        pickle.dump(snapshot, f)
+# @timeit
+# def take_snapshot(artist_seq_no,data_feed_seq_no, df_platform_concat_dict):
+#     snapshot_filename = OUTPUT_PATH / "snapshot.pkl"
+#     # write the snapshot to pick file
+#     with open(snapshot_filename, 'wb') as f: 
+#         snapshot = (artist_seq_no, data_feed_seq_no, df_platform_concat_dict)
+#         pickle.dump(snapshot, f)
 
-    logging.info("^^^^^^^ The snapshot data has been stored in the file {}, artist seq no is {}, data feed seq is {}".format(
-        str(snapshot_filename), artist_seq_no, data_feed_seq_no))
+#     logging.info("^^^^^^^ The snapshot data has been stored in the file {}, artist seq no is {}, data feed seq is {}".format(
+#         str(snapshot_filename), artist_seq_no, data_feed_seq_no))
 
 @timeit
 def get_platform_song_data(platform, song_name): 
@@ -89,16 +89,20 @@ def retrieve_clean_refine_platform_song_data(data_feed):
     artist_name, song_name, platform, album name list
     '''
     # unpack the data feed
-    artist_seq_no, artist_name, platform, song_name,  album_names = data_feed
+    _, song_name, platform, artist_names,  album_names = data_feed
 
-    logging.info("Start to retrieve, clean and refine the platform data for artist seq {} artist '{}' song '{}' on the platform '{}, album names are {}'".format(
-        artist_seq_no, artist_name, song_name, platform, album_names))
+    logging.info("Start to retrieve, clean and refine the platform data for\n song name:'{}' artist names: '{}' on the platform: '{}', album names: '{}'".
+                 format(song_name, ', '.join(artist_names), platform, ', '.join(album_names)))
 
+    ######################################################################
+    #### RETRIEVE
     df_platform_song = get_platform_song_data(platform=platform, song_name=song_name)
 
     if df_platform_song.empty: 
         return df_platform_song 
 
+    ######################################################################
+    #### CLEAN
     # replace the column name to the standard column name based on the column mapping information
     df_platform_song = df_platform_song.rename(columns=COLUMN_MAPPING[platform])
 
@@ -107,133 +111,83 @@ def retrieve_clean_refine_platform_song_data(data_feed):
 
     ## Only when the LOG_LEVEL is DEBUG, output the file to output folder for check
     if LOG_LEVEL == logging.DEBUG:
-        df_platform_cleaned_song.to_pickle(OUTPUT_PATH/ "debug" / "{artist_name}-{platform}-{song_name}.pkl".format(
-            artist_name= data_feed.artist_name, 
+        df_platform_cleaned_song.to_pickle(OUTPUT_PATH/ "debug" / "{platform}-{song_name}.pkl".format(
             platform= data_feed.platform, 
             song_name = data_feed.song_name))
     
     ######################################################################
-    # REFINEMENT LOGIC
+    # REFINEMENT 
     # now process the data and refine it for every specific platform 
-    logging.info("the shape of df_platform_song (before refinement) is {}: ".format(df_platform_song.shape))
 
-    refine_logic_func =refine_logics(platform) 
-    if refine_logic_func: 
-        logging.info("The refine logic function is: {}".format(refine_logic_func.__name__))
-        df_platform_cleaned_song= refine_logic_func(data_feed, df_platform_cleaned_song)
-        logging.info("the shape of refined df_platform_song is {}".format(df_platform_cleaned_song.shape))
-    else: 
-        raise RefineLogicFuncNotDefined
+    df_platform_cleaned_song= refine_platform_song_rows(data_feed, df_platform_cleaned_song)
 
     # reorg the columns in the cleaned_df_platform_song dataframe, the columns name should be sorted in asceding order
     df_platform_cleaned_song = df_platform_cleaned_song.loc[:, df_platform_cleaned_song.columns.sort_values()]
 
     return df_platform_cleaned_song 
 
-def process_one_artist(artist_seq_no, artist_name, df_client_singer, restart_snapshot = None): 
-    if restart_snapshot is None: 
-        df_platform_concat_dict = {p: pd.DataFrame()  for p in PLATFORMS}
-    else: 
-        restart_artist_seq_no, restart_data_feed_seq_no, df_platform_concat_dict = restart_snapshot
+def process_one_song(song_index, song_name, df_client_song): 
 
+    df_platform_concat_dict = {p: pd.DataFrame()  for p in PLATFORMS}
 
     ############################################################################ 
-    # get the singer statement information from the client statement excel sheet
-    # df_client_singer = get_artist_statement(artist_name, client_statement_file)
+    # get the albums name and artist names based on the song name 
+    album_names = df_client_song['c_album'].str.lower().drop_duplicates().tolist() 
+    album_names = tuple(map(lambda x: x.strip(), album_names))
+    logging.info("The album names are:\n {}".format('\n '.join(album_names)))
 
-    ########################################################################## 
-    # get the disctict song names from the df_client_singer
-    song_names = list(df_client_singer['cc_track'].fillna('').unique())
+    artist_names = df_client_song['cc_artist'].str.lower().drop_duplicates().tolist() 
+    # split the artist name by comma, and flatten the list of list
+    artist_names = map(lambda x: x.split(','), artist_names)
+    artist_names = [item for sublist in artist_names for item in sublist]
+    artist_names = tuple(map(lambda x: x.strip(), artist_names))
 
-    # The following line need to be removed finally, FOR TESTING ONLY
-    # song_names = song_names[:1]
+    logging.info("The artist names are:\n {}".format('\n '.join(artist_names)))
 
     ############################################################################ 
-    # get the albums name based on the song name 
-    # this is a dict, the key is the song_name, and the value is the album names list related to this song 
-    album_names_dict  = { song_name:  
-                         df_client_singer.loc[df_client_singer['cc_track'].str.lower() == song_name.lower()]['Album Name'].str.lower().drop_duplicates().tolist() 
-                         for song_name in song_names}
-    logging.debug("The album names dict is: {}".format(album_names_dict))
-
-    # if "Victory" in song_names:
-    #     song_names.remove("Victory")
-    #     song_names = ["Victory"] + song_names
-    # if "el dorado" in song_names:
-    #     song_names.remove("el dorado")
-    #     song_names = ["el dorado"] + song_names
-
-
-    logging.info("There are {} unique songs for artist '{}'".format(len(song_names), artist_name))
-    logging.debug("The songs names are: \n{}\n".format(', '.join(song_names)))
-
     # create the generator to generate the platform and song name
-    # TODO the artist_name in the datafeed must a string which is separated by ,  
-    data_feeds = [DataFeed(artist_seq_no, artist_name, platform, song_name, album_names_dict.get(song_name, '')) 
-                      for song_name in song_names if song_name.strip() !='' 
-                      for platform in PLATFORMS ]
+    data_feeds = [DataFeed(song_index, song_name, platform, artist_names, album_names) for platform in PLATFORMS ]
 
-    # data_feed = next(data_feeds)
-    for data_feed_seq_no, data_feed in enumerate(data_feeds): 
-
-        logging.info("****** Current artist seq is {artist_seq_no}, data feed seq is {data_feed_seq_no} \n".format(
-            artist_seq_no = data_feed.artist_seq_no, data_feed_seq_no=data_feed_seq_no))
-        logging.debug("======The data feed is: {}".format(data_feed))
-
-        if data_feed_seq_no < (START_DATA_FEED_IDX if restart_snapshot is None else restart_data_feed_seq_no) and artist_seq_no <= (START_ARTIST_INDEX if restart_snapshot is None else restart_artist_seq_no): 
-            logging.warning("The start data feed index is {start}, current data feed seq is {seq_no}, skipped ....".format(start = START_DATA_FEED_IDX, seq_no=data_feed_seq_no))
-            continue
-
-        if data_feed_seq_no > END_DATA_FEED_IDX and artist_seq_no >= END_ARTIST_INDEX: 
-            logging.warning("The end index value is {end}, current seq number is {seq_no}, Now stop the iteration....".format(end = END_DATA_FEED_IDX, seq_no=data_feed_seq_no))
-            break
-
+    for data_feed in data_feeds: 
         ####################################################################################################################
-        # when the dict is created, take the snapshot to save the progress in case the long run program is killed
-        take_snapshot(data_feed.artist_seq_no, data_feed_seq_no, df_platform_concat_dict)
-
-        ####################################################################################################################
-        # when some problem happens, the patially concated platform data for the artist will be storted in the pickle file
-        try: 
-            df_platform_cleaned_song= retrieve_clean_refine_platform_song_data(data_feed)
-            logging.debug("The shape of df_platform_cleaned_song is {} after calling retrieve_clean_refine_platform_song_data".format(df_platform_cleaned_song.shape))
-        except DatabaseQueryException: 
-            raise DatabaseQueryException  # early exit, and save the partial result file to pickle file
-    
+        # Now do the refining process, 
+        df_platform_cleaned_song= retrieve_clean_refine_platform_song_data(data_feed)
+        logging.debug("The shape of df_platform_cleaned_song is {} after calling retrieve_clean_refine_platform_song_data".format(df_platform_cleaned_song.shape))
 
         df_platform_concat_dict[data_feed.platform] = pd.concat([df_platform_concat_dict[data_feed.platform], df_platform_cleaned_song])
 
-
     
     # filter the columns for dataframe df_client_singer and df_platform, using CLIENT_COLS and PLATFORM_COLS
-    df_client_singer = df_client_singer.loc[:, CLIENT_COLS]
+    df_client_song = df_client_song.loc[:, CLIENT_COLS]
 
     for platform in PLATFORMS: 
         if not df_platform_concat_dict[platform].empty:
+            df_platform_concat_dict[platform]['platform'] =  platform
             df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
-
+            
     df_platform_concat_all = pd.concat(df_platform_concat_dict.values())
 
 
-    df_client_singer, df_platform_concat_all = preprocess_data(df_client_singer, df_platform_concat_all ) 
+    df_client_song, df_platform_concat_all = preprocess_data(df_client_song, df_platform_concat_all ) 
 
     ## when log_level is debug, then output the file to debug folder 
-    df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format('_'.join( artist_name.split())))
-    df_client_singer.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format('_'.join(artist_name.split())))
+    df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format('_'.join(song_name.split())))
+    df_client_song.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format('_'.join(song_name.split())))
     logging.info("The CLIENT and PLATFORM_ALL files have been outputted to the debug folder")
 
 
     try: 
         # To the final match between the client statements and the platform data
-        matched_df, unmatched_df = match_tracks(df_client_singer,df_platform_concat_all)
+        matched_df, unmatched_df = match_tracks(df_client_song,df_platform_concat_all)
         logging.info("The matched df shape is {}, unmatched df shape is {}".format(matched_df.shape, unmatched_df.shape))
-        final_result_path = OUTPUT_PATH / "{}-matched_v.xlsx".format('_'.join(artist_name.split()))
+        final_result_path = OUTPUT_PATH / "{}-matched_v1.xlsx".format('_'.join(song_name.split()))
         save_to_excel(matched_df, unmatched_df, final_result_path)
-        logging.info("The final result has been saved to {}\n\n".format(final_result_path))
+        logging.info("The final result has been saved to {}\n".format(final_result_path))
         # delete the snapshot file once the result is created 
-        os.remove(OUTPUT_PATH / "snapshot.pkl" )   
-        logging.info("============== The current artist '{}' is processed successfully. The snapshot file has been removed\n\n".format(artist_name))
+        with open(OUTPUT_PATH / "restart_song_index.txt", 'w') as f:
+            f.write(str(song_index+1))
+        logging.info("============== The current song index '{}', song name '{}' is processed successfully. The restart_song_index file has been updated\n\n".format(song_index,song_name))
     except Exception as e:
-        logging.error("Failed to process the artist '{}'".format(artist_name))
+        logging.error("Failed to process the artist '{}'".format(song_name))
         logging.info("Please solve the problem and then restart the applicatoin , python main.py restart")
         logging.exception(e)
