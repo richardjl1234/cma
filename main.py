@@ -7,8 +7,11 @@ from modules.common import timeit
 from pathlib import Path
 import pandas as pd
 
+# get the current date in format yyyymmdd
+from datetime import datetime
+today = datetime.today().strftime('%Y%m%d')
 
-log_name = LOG_PATH / 'song_audit.log'
+log_name = LOG_PATH / 'song_audit_{}.log'.format(today)
 # setup the logging to output the log to console and log file. 
 logging.basicConfig(level=LOG_LEVEL,
                     format='%(asctime)s : %(levelname)s : %(message)s',
@@ -23,7 +26,7 @@ def get_song_statement_data(client_statement_file, input_folder= INPUT_PATH)   :
     # read the file_name into data frame
     logging.info("Read the input file '{}' into memory...".format(client_statement_file))
     _, file_ext= os.path.splitext(client_statement_file)
-    print(file_ext)
+    # print(file_ext)
 
     input_file_full_path = Path(input_folder) / client_statement_file 
 

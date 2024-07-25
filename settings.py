@@ -16,8 +16,8 @@ OUTPUT_PATH = Path('output') # specify the folder where the output files to be s
 
 # the input file should be in the input_data folder, the format can be xlsx, csv or pkl
 INPUT_PATH = "input_data"
-INPUT_FILE = "cc_soave.pkl"  
-# INPUT_FILE = "cc_soave.xlsx"  
+# INPUT_FILE = "cc_soave.pkl"  
+INPUT_FILE = "cc_soave.xlsx"  
 # INPUT_FILE = "cc_twosteps.xlsx"  
 
 # This is useful when we need to resume the process from the previous aborted process 
