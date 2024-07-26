@@ -168,7 +168,11 @@ def process_one_song(song_index, song_name, df_client_song):
     df_platform_concat_all = pd.concat(df_platform_concat_dict.values())
 
 
-    df_client_song, df_platform_concat_all = preprocess_data(df_client_song, df_platform_concat_all ) 
+    try: 
+        df_client_song, df_platform_concat_all = preprocess_data(df_client_song, df_platform_concat_all ) 
+    except Exception as e:
+        logging.error("Failed to process '{}'".format(song_name))
+        print(df_platform_concat_all.head())
 
     ## when log_level is debug, then output the file to debug folder 
     df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format('_'.join(song_name.split())))
@@ -191,3 +195,39 @@ def process_one_song(song_index, song_name, df_client_song):
         logging.error("Failed to process the artist '{}'".format(song_name))
         logging.info("Please solve the problem and then restart the applicatoin , python main.py restart")
         logging.exception(e)
+
+
+if __name__ == "__main__":
+
+    @timeit
+    def get_platform_data(platform, sql): 
+        """
+        Funtion to get the raw platform data from the platform database, based on the platform name and the song name
+        input: platform name, song_name
+        output: dataframe of the platform data for the song_name
+        """
+        if platform not in PLATFORMS: 
+            logging.error("The platform '{}' is not in in-scope list, skipped...".format(platform))
+            return None
+
+        # get the sql statement template based on the platform name
+        logging.info("The sql statement is: {}".format(sql))
+        conn_param = get_conn_params(platform)
+
+        # run the query to get the data based on the song name
+        df_platform_song_raw = execute_sql_query_retriable(sql, conn_param)
+
+        return df_platform_song_raw
+
+    # set the log level
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    # test the performance of the function get_platform_song_data
+    platform = 'netease_max'
+    song_name = 'mohicans'
+    sql1 = SQL_SONG[platform].format(song_name=song_name.replace("'", "''")) # when single quote included in the name, doubling the single quote
+    platform = 'netease_max_test'
+    sql2 = SQL_SONG[platform].format(song_name=song_name.replace("'", "''")) # when single quote included in the name, doubling the single quote
+    get_platform_song_data('netease_max', sql1)
+    get_platform_song_data('netease_max', sql2)
+    
+
