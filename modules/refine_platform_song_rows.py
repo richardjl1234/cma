@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from settings import DataFeed, INCLUDE_REFINE_SIMILARITY_LEVEL, LOG_LEVEL
+from settings import DataFeed,  LOG_LEVEL
 
 pd.options.mode.chained_assignment = None
 
@@ -16,12 +16,19 @@ def filter_song_name(row, song_name ):
     return row['pc_track'].lower().strip() == song_name.lower().strip() 
 
 # Define the filters below which need to be used in the refine process
+# pc_artist could a list of artist which are separated by ,
 def filter_artist_names(row, artist_names):
-    return any(name.lower().strip() == row['pc_artist'].lower().strip() for name in artist_names) 
+    artist_names_in_pc_artist_column = row['pc_artist'].split(',') 
+    return any(name.lower().strip() == pc_artist_name.lower().strip()
+               for name in artist_names for pc_artist_name in artist_names_in_pc_artist_column) 
 
 # define the filter that track name 
 def filter_album_names(row, album_names):
     return any(name.lower().strip() == row['p_album'].lower().strip() for name in album_names) 
+
+# define the filter for song_versions
+def filter_version(row, song_versions):
+    return any(version.lower().strip() == row['pc_version'].lower().strip() for version in song_versions)
 
 def filter_level1(row, song_name, artist_names): 
     return filter_song_name(row, song_name) and filter_artist_names(row, artist_names)
@@ -36,7 +43,7 @@ def filter_level3(row, song_name, artist_names, album_names):
 # refine logic for netease_max
 def refine_platform_song_rows(data_feed: DataFeed, df_platform_song:pd.DataFrame ) -> pd.DataFrame:
     # unpack the data_feed input
-    _, song_name, platform, artist_names, album_names = data_feed
+    _, song_name, platform, artist_names, album_names, song_versions = data_feed
     logging.info("the shape of the song '{}' dataframe (BEFORE Refined): {} ".format(song_name, df_platform_song.shape))
     
     df_platform_song['pc_track'] = df_platform_song['pc_track'].fillna('')
@@ -63,10 +70,20 @@ def refine_platform_song_rows(data_feed: DataFeed, df_platform_song:pd.DataFrame
     for level, count in dict(counts).items():
         logging.info(" There are {} records in level {}...".format(count, level))
 
-    logging.info(f"The value of {INCLUDE_REFINE_SIMILARITY_LEVEL = }...")
-    df_refine_final =  df_platform_song_refined.loc[df_platform_song_refined['refine_similarity'] <= INCLUDE_REFINE_SIMILARITY_LEVEL]
+    # logging.info(f"The value of {INCLUDE_REFINE_SIMILARITY_LEVEL = }...")
+    # df_refine_final =  df_platform_song_refined.loc[df_platform_song_refined['refine_similarity'] <= INCLUDE_REFINE_SIMILARITY_LEVEL]
+    df_refine_final = df_platform_song_refined
     logging.info("the shape of the song '{}' dataframe (AFTER refined): {} ".format(song_name, df_refine_final.shape))
     return df_refine_final
+
+def refine_platform_song_rows_v2(data_feed: DataFeed, df_platform_song:pd.DataFrame) -> pd.DataFrame:
+    _, song_name, platform, artist_names, album_names, song_versions = data_feed
+    logging.info("the shape of the song '{}' dataframe (BEFORE Refined): {} ".format(song_name, df_platform_song.shape))    
+    df_refine_intermediate = df_platform_song.loc[df_platform_song.apply(filter_song_name, axis=1, args=(song_name, ))]
+    df_refine_intermediate['refine_process_comment'] = ''
+    df_refine_intermediate['refine_similarity'] = 4 
+    logging.info("the shape of the song '{}' dataframe (AFTER refined): {} ".format(song_name,df_refine_intermediate.shape))
+    return df_refine_intermediate
 
 # TODO this test method need to be rewrite
 def test_refine_logic():

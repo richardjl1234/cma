@@ -16,13 +16,13 @@ OUTPUT_PATH = Path('output') # specify the folder where the output files to be s
 
 # the input file should be in the input_data folder, the format can be xlsx, csv or pkl
 INPUT_PATH = "input_data"
-# INPUT_FILE = "cc_soave.pkl"  
-INPUT_FILE = "cc_soave.xlsx"  
+INPUT_FILE = "cc_soave.pkl"  
+# INPUT_FILE = "cc_soave.xlsx"  
 # INPUT_FILE = "cc_twosteps.xlsx"  
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_SONG_INDEX = 0 # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 30 # specfiy when the process will be stopped
+END_SONG_INDEX = 40 # specfiy when the process will be stopped
 
 # include the refine_similarity_level_2 records, level 2 are the rows with exact matching on song name, but does not match on singer name and alblum name
 # similarity level 1, song name match + artist name match
@@ -32,7 +32,7 @@ END_SONG_INDEX = 30 # specfiy when the process will be stopped
 # when the value is 2, it will return the level 1 and 2 rows
 # when the value is 3, it will return all the rows
 # default, we should use 2, which means we will return the level 1 and 2 rows
-INCLUDE_REFINE_SIMILARITY_LEVEL = 2 
+# INCLUDE_REFINE_SIMILARITY_LEVEL = 3 
 
 ##############################################################
 # the column mapping from query result to the pc_columns
@@ -81,4 +81,4 @@ def get_conn_params(platform):
     return ConnParams(os.environ["POSTGRE_HOST"], 5432,platform,  os.environ["POSTGRE_USER"], os.environ["POSTGRE_PWD"] ) 
 
 ##############################################################
-DataFeed = namedtuple("DataFeed", ['song_index', 'song_name', 'platform', 'artist_names', 'album_names'])
+DataFeed = namedtuple("DataFeed", ['song_index', 'song_name', 'platform', 'artist_names', 'album_names', 'song_versions'])

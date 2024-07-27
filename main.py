@@ -3,7 +3,7 @@ import pickle
 import logging
 from settings import LOG_PATH, OUTPUT_PATH, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, INPUT_FILE, INPUT_PATH
 from one_song_process import process_one_song
-from modules.common import timeit
+from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
 import pandas as pd
 
@@ -85,16 +85,21 @@ def main():
     # now process the song one by one
     logging.warning("^^^^^ The song index which less than {} are skipped...\n".format(start_song_index))
     for song_index, song_name in enumerate(song_names[start_song_index: END_SONG_INDEX + 1]):
-        logging.info("********* Processing song index: {}, the song name:  '{}',  *********".format(song_index + start_song_index, song_name))
+        actual_song_index = song_index + start_song_index
+        logging.info("********* Processing song index: {}, the song name:  '{}',  *********".format(actual_song_index, song_name))
 
         # get the df_song which for this song only
         df_client_song = df_songs.loc[df_songs['cc_track'].str.strip("'").str.strip('"').str.strip().str.lower() == song_name.lower()]
 
         logging.info("The shape of df_song is {}".format(df_client_song.shape))
-        process_one_song(song_index, song_name, df_client_song)
+        process_one_song(actual_song_index, song_name, df_client_song)
 
     # TODO, do we need to merge all the pickle files to one final one? 
-
+    logging.info("The program finished...")
+    logging.debug("The function time dict is:\n {}".format(FUNC_TIME_DICT))
+    for func_name, time_list in FUNC_TIME_DICT.items():
+        if len(time_list) == 0: continue
+        logging.info("The function {} took {}s in average".format(func_name, sum(time_list)/len(time_list)))
 
 if __name__ == "__main__":
     main()  

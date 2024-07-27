@@ -14,9 +14,9 @@ from modules.rds_access import execute_sql_query_retriable, DatabaseQueryExcepti
 from modules.common import timeit
 from collections import namedtuple
 from modules.pc_platform import clean_song_data
-from modules.refine_platform_song_rows import refine_platform_song_rows
+from modules.refine_platform_song_rows import refine_platform_song_rows_v2
 
-from modules.msv7 import preprocess_data, match_tracks, save_to_excel, CLIENT_COLS, PLATFORM_COLS
+from modules.msv7 import preprocess_data, match_tracks_v2, save_to_excel_v2, CLIENT_COLS, PLATFORM_COLS
 
 pd.options.mode.chained_assignment = None
 
@@ -89,10 +89,10 @@ def retrieve_clean_refine_platform_song_data(data_feed):
     artist_name, song_name, platform, album name list
     '''
     # unpack the data feed
-    _, song_name, platform, artist_names,  album_names = data_feed
+    _, song_name, platform, artist_names,  album_names, song_version = data_feed
 
-    logging.info("Start to retrieve, clean and refine the platform data for\n song name:'{}' artist names: '{}' on the platform: '{}', album names: '{}'".
-                 format(song_name, ', '.join(artist_names), platform, ', '.join(album_names)))
+    logging.info("Start to retrieve, clean and refine the platform data for\n song name:'{}' artist names: '{}' on the platform: '{}', album names: '{}', version: '{}'".
+                 format(song_name, ', '.join(artist_names), platform, ', '.join(album_names), song_version))
 
     ######################################################################
     #### RETRIEVE
@@ -118,14 +118,16 @@ def retrieve_clean_refine_platform_song_data(data_feed):
     ######################################################################
     # REFINEMENT 
     # now process the data and refine it for every specific platform 
+    # only the rows with track name match to be used for the subsequence matching (v2)
 
-    df_platform_cleaned_song= refine_platform_song_rows(data_feed, df_platform_cleaned_song)
+    df_platform_cleaned_song= refine_platform_song_rows_v2(data_feed, df_platform_cleaned_song)
 
     # reorg the columns in the cleaned_df_platform_song dataframe, the columns name should be sorted in asceding order
     df_platform_cleaned_song = df_platform_cleaned_song.loc[:, df_platform_cleaned_song.columns.sort_values()]
 
     return df_platform_cleaned_song 
 
+@timeit
 def process_one_song(song_index, song_name, df_client_song): 
 
     df_platform_concat_dict = {p: pd.DataFrame()  for p in PLATFORMS}
@@ -144,9 +146,14 @@ def process_one_song(song_index, song_name, df_client_song):
 
     logging.info("The artist names are:\n {}".format('\n '.join(artist_names)))
 
+    # song versions 
+    song_versions = df_client_song['cc_version'].fillna('generic').str.lower().drop_duplicates().tolist()
+    song_versions = tuple(map(lambda x: x.strip(), song_versions))
+    logging.info("The song versions are:\n {}".format('\n '.join(song_versions)))
+
     ############################################################################ 
     # create the generator to generate the platform and song name
-    data_feeds = [DataFeed(song_index, song_name, platform, artist_names, album_names) for platform in PLATFORMS ]
+    data_feeds = [DataFeed(song_index, song_name, platform, artist_names, album_names, song_versions) for platform in PLATFORMS ]
 
     for data_feed in data_feeds: 
         ####################################################################################################################
@@ -162,7 +169,7 @@ def process_one_song(song_index, song_name, df_client_song):
 
     for platform in PLATFORMS: 
         if not df_platform_concat_dict[platform].empty:
-            df_platform_concat_dict[platform]['platform'] =  platform
+            df_platform_concat_dict[platform]['p_platform'] =  platform
             df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
             
     df_platform_concat_all = pd.concat(df_platform_concat_dict.values())
@@ -182,10 +189,10 @@ def process_one_song(song_index, song_name, df_client_song):
 
     try: 
         # To the final match between the client statements and the platform data
-        matched_df, unmatched_df = match_tracks(df_client_song,df_platform_concat_all)
+        matched_df, unmatched_df = match_tracks_v2(df_client_song,df_platform_concat_all)
         logging.info("The matched df shape is {}, unmatched df shape is {}".format(matched_df.shape, unmatched_df.shape))
-        final_result_path = OUTPUT_PATH / "{}-matched_v1.xlsx".format('_'.join(song_name.split()))
-        save_to_excel(matched_df, unmatched_df, final_result_path)
+        final_result_path = OUTPUT_PATH / "N{}-{}-matched_v3.xlsx".format(song_index,'_'.join( song_name.split()))
+        save_to_excel_v2(matched_df, unmatched_df, final_result_path)
         logging.info("The final result has been saved to {}\n".format(final_result_path))
         # delete the snapshot file once the result is created 
         with open(OUTPUT_PATH / "restart_song_index.txt", 'w') as f:

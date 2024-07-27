@@ -83,6 +83,7 @@ def clean_song_data(raw_data):
 
    # Standardizing 'pc_version' and 'pc_track' as per new requirements
    raw_data['pc_version'] = raw_data['pc_version'].fillna('generic').str.lower().str.strip()
+   raw_data['pc_version'] = raw_data['pc_version'].apply(lambda x: 'generic' if x.strip() == '' else x) 
    raw_data['pc_track'] = raw_data['pc_track'].str.lower().str.strip()
 
 

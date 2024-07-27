@@ -1,10 +1,16 @@
 import pandas as pd
 from fuzzywuzzy import fuzz
 import logging
+import sys, os
 
+# Add the parent directory to the system path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+from settings import   LOG_LEVEL
+from modules.common import timeit
 
-CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 'Unique Song ID', 'Unique Version ID']
-PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 'pc_artist', 'pc_version', 'refine_process_comment', 'refine_similarity', 'platform'] 
+CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 'Unique Song ID', 'Unique Version ID', 'c_album', 'c_platform']
+PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 'pc_artist', 'pc_version', 'refine_process_comment', 'refine_similarity', 'p_platform', 'p_album'] 
 
 
 def extract_columns(excel_path, csv_path):
@@ -35,13 +41,13 @@ def preprocess_data(client_df, platform_df):
 
 
    # Aggregate the data to handle possible duplicates and reset the index
-   client_df = client_df.groupby(['cc_track', 'cc_version']).first().reset_index()
+   client_df = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_platform', 'c_album']).first().reset_index()
    logging.info("Data preprocessed.")
 
 
    return client_df, platform_df
 
-
+@timeit
 def match_tracks(client_df, platform_df):
    """
    Match the tracks from the 'platform' dataframe to the 'client' dataframe.
@@ -123,6 +129,18 @@ def save_to_excel(matched_df, unmatched_df, output_path):
       
    logging.info("📊 Data saved to Excel. Check the output file at: {}".format(str(output_path)) )
 
+def save_to_excel_v2(matched_df, unmatched_df, output_path):
+   """
+   Save the results to the 'matched_results.xlsx' workbook.
+   """
+   logging.info("💾 Saving results to Excel...")
+   with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+       # Save matched data to 'Matched' sheet
+       matched_df.to_excel(writer, sheet_name='matched', index=False)
+       # Save unmatched data to 'Matched' sheet starting from row after matched data
+       unmatched_df.to_excel(writer, sheet_name='unmatched',  index=False)
+
+   logging.info("📊 Data saved to Excel. Check the output file at: {}".format(str(output_path)) )
 
 def run_matching_operation():
    """
@@ -136,6 +154,83 @@ def run_matching_operation():
    client_df, platform_df = preprocess_data(client_df, platform_df)
    matched_df, unmatched_df = match_tracks(client_df, platform_df)
    save_to_excel(matched_df, unmatched_df, output_path)
+
+
+# check if the platform name match with each other
+def filter_platform(row_p, c_platform):
+    # return True
+    a =   ('netease' in row_p['p_platform'].lower().strip() and 'netease' in c_platform.lower().strip())
+    b =   ('kugou' in row_p['p_platform'].lower().strip() and 'kugou' in c_platform.lower().strip())
+    # logging.info(f"THE PLATFORM CHECK.... {b = }, {row_p['p_platform'] =}, {c_platform =}"  )
+    c =   ('qqmusic' in row_p['p_platform'].lower().strip() and 'qqmusic' in c_platform.lower().strip())
+    d =   ('kuwo' in row_p['p_platform'].lower().strip() and 'kuwo' in c_platform.lower().strip())
+    return a or b or c or d
+
+def filter_song_name(row, song_name ):
+    return row['pc_track'].lower().strip().strip('"').strip("'") == song_name.lower().strip().strip('"').strip("'")
+
+# Define the filters below which need to be used in the refine process
+# pc_artist could a list of artist which are separated by ,
+def filter_artist_names(row, artist_names_c):
+    artist_names_in_pc_artist_column = row['pc_artist'].split(',') 
+    artist_names_in_cc_artist_column = artist_names_c.split(',')
+
+    return any(name.lower().strip() == pc_artist_name.lower().strip()
+               for name in artist_names_in_cc_artist_column 
+               for pc_artist_name in artist_names_in_pc_artist_column) 
+
+# define the filter that track name 
+def filter_album_name(row, album_name):
+    return album_name.lower().strip() == row['p_album'].lower().strip() 
+
+# define the filter for song_versions
+def filter_version(row, song_version):
+    return song_version.lower().strip() == row['pc_version'].lower().strip() 
+
+def filter_level1(row, song_name, song_version, artist_names, album_name, platform_name): 
+    return filter_platform(row, platform_name) and filter_song_name(row, song_name) and filter_version(row, song_version) and filter_artist_names(row, artist_names) and filter_album_name(row, album_name) 
+
+def filter_level2(row, song_name, song_version, artist_names, album_name, platform_name): 
+    return filter_platform(row, platform_name) and filter_song_name(row, song_name) and filter_version(row, song_version) and filter_artist_names(row, artist_names) and (not filter_album_name(row, album_name)) 
+        
+def filter_level3(row, song_name, song_version, artist_names, album_name, platform_name): 
+    return filter_platform(row, platform_name) and filter_song_name(row, song_name) and filter_artist_names(row, artist_names) 
+
+
+@timeit
+def match_tracks_v2(df_client, df_platform):
+
+   logging.info("🔍 Matching tracks...")
+   match_results = []
+   unmatch_results = []
+
+   for idx_p, row_p in df_platform.iterrows():
+       for idx_c, row_c in df_client.iterrows():
+           if filter_level1(row_p, row_c['cc_track'], row_c['cc_version'], row_c['cc_artist'], row_c['c_album'], row_c['c_platform']):
+               row_p['refine_process_comment'] = 'Track, version, artist, album Exact Match'
+               row_p['refine_similarity'] = 1
+               match_results.append({**row_p.to_dict(), **row_c.to_dict(), 'match_id': idx_p + 1})
+           elif filter_level2(row_p, row_c['cc_track'], row_c['cc_version'], row_c['cc_artist'], row_c['c_album'], row_c['c_platform']): 
+               row_p['refine_process_comment'] = 'Track, Version, Artist Exact Match (album not match)'
+               row_p['refine_similarity'] = 2
+               match_results.append({**row_p.to_dict(), **row_c.to_dict(), 'match_id': idx_p + 1})
+           elif filter_level3(row_p, row_c['cc_track'], row_c['cc_version'], row_c['cc_artist'], row_c['c_album'], row_c['c_platform']): 
+               row_p['refine_process_comment'] = 'Track, Artist Match'
+               row_p['refine_similarity'] = 3
+               match_results.append({**row_p.to_dict(), **row_c.to_dict(), 'match_id': idx_p + 1})
+           elif filter_song_name(row_p, row_c['cc_track']):
+               row_p['refine_process_comment'] = 'Track Match Only'
+               row_p['refine_similarity'] = 4
+               unmatch_results.append(row_p.to_dict())
+           else: 
+               logging.warning("No match found for platform track: {}".format(row_p['pc_track']))
+               logging.debug(f"{row_p.to_dict() = }")
+               logging.debug(f"{row_c.to_dict() = }")
+               continue
+        
+   logging.info("===== Matching completed.")
+
+   return pd.DataFrame(match_results), pd.DataFrame(unmatch_results)
 
 
 if __name__ == "__main__":
