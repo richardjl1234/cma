@@ -170,12 +170,12 @@ def process_one_song(song_index, song_name, df_client_song):
     for platform in PLATFORMS: 
         if not df_platform_concat_dict[platform].empty:
             df_platform_concat_dict[platform]['p_platform'] =  platform
-            df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
+            # df_platform_concat_dict[platform] =  df_platform_concat_dict[platform].loc[:, PLATFORM_COLS]
             
     df_platform_concat_all = pd.concat(df_platform_concat_dict.values())
 
-
     try: 
+        df_platform_concat_all = df_platform_concat_all.loc[:,PLATFORM_COLS ]
         df_client_song, df_platform_concat_all = preprocess_data(df_client_song, df_platform_concat_all ) 
     except Exception as e:
         logging.error("Failed to process '{}'".format(song_name))
@@ -191,9 +191,11 @@ def process_one_song(song_index, song_name, df_client_song):
         # To the final match between the client statements and the platform data
         matched_df, unmatched_df = match_tracks_v2(df_client_song,df_platform_concat_all)
         logging.info("The matched df shape is {}, unmatched df shape is {}".format(matched_df.shape, unmatched_df.shape))
-        final_result_path = OUTPUT_PATH / "N{}-{}-matched_v3.xlsx".format(song_index,'_'.join( song_name.split()))
-        save_to_excel_v2(matched_df, unmatched_df, final_result_path)
-        logging.info("The final result has been saved to {}\n".format(final_result_path))
+
+        final_result_path = OUTPUT_PATH / "excel" / "N{:06d}-{}-matched_v4.xlsx".format(song_index,'_'.join( song_name.split()))
+        final_pickle_path = OUTPUT_PATH / "pickle" / "N{:06d}-{}.pkl".format(song_index,'_'.join( song_name.split()))
+
+        save_to_excel_v2(matched_df, unmatched_df, final_result_path, output_pickle_path=final_pickle_path)
         # delete the snapshot file once the result is created 
         with open(OUTPUT_PATH / "restart_song_index.txt", 'w') as f:
             f.write(str(song_index+1))
@@ -202,6 +204,8 @@ def process_one_song(song_index, song_name, df_client_song):
         logging.error("Failed to process the artist '{}'".format(song_name))
         logging.info("Please solve the problem and then restart the applicatoin , python main.py restart")
         logging.exception(e)
+    
+
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from one_song_process import process_one_song
 from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
 import pandas as pd
+from modules.msv7 import save_to_excel_v2
 
 # get the current date in format yyyymmdd
 from datetime import datetime
@@ -64,6 +65,12 @@ def get_song_statement_data(client_statement_file, input_folder= INPUT_PATH)   :
 
 
 def main():
+    pickle_path = Path("output/pickle")
+    excel_path = Path("output/excel")
+    # move the final_result.xlsx to the archive folder
+    final_result_file = OUTPUT_PATH / 'final_result.xlsx'
+    if final_result_file.exists():
+        os.rename(final_result_file, OUTPUT_PATH / "archive" / final_result_file.name)
 
     ####################################################################################
     # get the artist names and dataframe 
@@ -79,6 +86,15 @@ def main():
         logging.info("<<<<< The program RESTARTED from the song index {} >>>>>>".format(restart_song_index))
         start_song_index = int(restart_song_index) 
     else: 
+        ######################################################
+        # remove all the pick fills in the pickle_path and excel_path
+        for file in pickle_path.glob("*.pkl"):
+            os.remove(file)
+        for file in excel_path.glob("*.xlsx"):
+            os.remove(file)
+        logging.info("All the pickle files in the folder '{}' are removed...".format(pickle_path))
+        logging.info("All the execl files in the folder '{}' are removed...".format(excel_path))
+
         logging.info("<<<<< The program STARTED from the song index {} >>>>>>".format(START_SONG_INDEX))
         start_song_index = START_SONG_INDEX
 
@@ -94,7 +110,25 @@ def main():
         logging.info("The shape of df_song is {}".format(df_client_song.shape))
         process_one_song(actual_song_index, song_name, df_client_song)
 
-    # TODO, do we need to merge all the pickle files to one final one? 
+    ######################################################
+    # now get all the pickle files from output/pickle folder, read them and the merge them into final excel file in output folder
+    pickle_files = list(pickle_path.glob("*.pkl"))
+    logging.info(" ###### Final Summarization ######")
+    logging.info("The number of pickle files is {}".format(len(pickle_files)))
+    dfs_matched, dfs_unmatched  = pd.DataFrame(), pd.DataFrame() 
+    for file in pickle_files:
+        matched_df, unmatched_df = pickle.load(open(file, 'rb'))
+        logging.info("The matched df shape is {}, unmatched df shape is {}, filename is {}".format(matched_df.shape, unmatched_df.shape, file.name))  
+        dfs_matched = pd.concat([dfs_matched, matched_df])
+        dfs_unmatched = pd.concat([dfs_unmatched, unmatched_df])
+
+    logging.info("The final matched df shape is {}, unmatched df shape is {}".format(dfs_matched.shape, dfs_unmatched.shape))
+    save_to_excel_v2(dfs_matched, dfs_unmatched, OUTPUT_PATH / "final_result.xlsx")
+    # the save the matched result and unmatched result to csv files
+    # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")
+    # dfs_unmatched.to_csv(OUTPUT_PATH / "unmatched_result.csv")
+        
+
     logging.info("The program finished...")
     logging.debug("The function time dict is:\n {}".format(FUNC_TIME_DICT))
     for func_name, time_list in FUNC_TIME_DICT.items():
