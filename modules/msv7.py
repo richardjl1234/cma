@@ -42,7 +42,7 @@ def preprocess_data(client_df, platform_df):
 
 
    # Aggregate the data to handle possible duplicates and reset the index
-   client_df = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_platform', 'c_album']).first().reset_index()
+   client_df = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album']).first().reset_index()
    logging.info("Data preprocessed.")
 
 
@@ -187,9 +187,9 @@ def filter_artist_names(row, artist_names_c):
     result = any(name.lower().strip() == pc_artist_name.lower().strip()
                for name in artist_names_in_cc_artist_column 
                for pc_artist_name in artist_names_in_pc_artist_column) 
-    logging.debug(f"{result = }")
-    logging.debug(f"{artist_names_in_pc_artist_column = }")
-    logging.debug(f"{artist_names_in_cc_artist_column = }")
+    # logging.debug(f"{result = }")
+    # logging.debug(f"{artist_names_in_pc_artist_column = }")
+    # logging.debug(f"{artist_names_in_cc_artist_column = }")
     return result
 
 # define the filter that track name 
@@ -198,8 +198,11 @@ def filter_album_name(row, album_name):
 
 # define the filter for song_versions
 def filter_version(row, song_version, song_versions): # song_versions are the all versions in the client statements
-    a = song_version.lower().strip() == row['pc_version'].lower().strip()
-    b = (song_version.lower().strip() == 'generic' and row['pc_version'].lower().strip() not in song_versions)
+    p_song_versions = row['pc_version'].replace('、', ',').split(',') 
+    # a = song_version.lower().strip() == row['pc_version'].lower().strip()
+    a = any(song_version.lower().strip() == p_song_version.strip() for p_song_version in p_song_versions)
+    # b = (song_version.lower().strip() == 'generic' and row['pc_version'].lower().strip() not in song_versions)
+    b = (song_version.lower().strip() == 'generic' and all(p_song_version.strip() not in song_versions for p_song_version in p_song_versions))
     return a or b
 
 def filter_level1(row, song_name, song_version, artist_names, album_name, platform_name, song_versions): 
