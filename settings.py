@@ -5,10 +5,11 @@ import logging
 from collections import namedtuple
 
 # LOG_LEVEL=logging.INFO
-LOG_LEVEL=logging.DEBUG
+LOG_LEVEL=logging.INFO
 
 # TODO, the platform qqmusicv2 need to added, but now the performance is not good, so it is not ready to be added
-PLATFORMS = ('netease_max', 'kugou')
+PLATFORMS = ('netease_max', 'kugou',)
+# PLATFORMS = ('qqmusicv2', )
 #PLATFORMS = ( 'kugou', )
 
 LOG_PATH = Path('log')   # specify folder where the log files to be stored

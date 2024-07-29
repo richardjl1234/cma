@@ -105,6 +105,8 @@ def retrieve_clean_refine_platform_song_data(data_feed):
     #### CLEAN
     # replace the column name to the standard column name based on the column mapping information
     df_platform_song = df_platform_song.rename(columns=COLUMN_MAPPING[platform])
+    # special process for qqmusicv2
+    df_platform_song['p_artist'] = df_platform_song['p_artist'].apply(lambda x: ', '.join(x) if type(x) == list else x)
 
     # do the clean process for the platform data, add the columns pc_xxxxx
     df_platform_cleaned_song = clean_song_data(df_platform_song)
