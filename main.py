@@ -57,6 +57,9 @@ def get_song_statement_data(client_statement_file, input_folder= INPUT_PATH)   :
     song_names = df_songs['cc_track'].unique()
     song_names = list(map(lambda x: x.strip('"').strip("'").strip().lower(), song_names)) # remove the single quote, double qote and spaces from the song_names 
     
+    # update the cc_version na to be generic
+    df_songs['cc_version'] = df_songs['cc_version'].fillna('generic')
+
     logging.info("There are {} unique song names in the dataframe...\n".format(len(song_names)))
     logging.debug("The list of the song names are: {}".format(', '.join(song_names)))
     logging.debug("The column names in the df_songs are:\n {} \n".format(', '.join(df_songs.columns)))
@@ -150,9 +153,9 @@ def main():
 
     # save_to_excel_v2_matched(dfs_matched, dfs_unmatched, OUTPUT_PATH / "final_result.xlsx")
     # output all the result to the final excel file and csv file
-    dfs_matched.to_excel(OUTPUT_PATH / "matched_result_details.xlsx", index=True)
-    dfs_unmatched.to_csv(OUTPUT_PATH/ "unmatched_result.csv", index=False)
-    dfs_summary.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
+    dfs_matched.reset_index(drop=True).to_excel(OUTPUT_PATH / "matched_result_details.xlsx", index=True)
+    dfs_unmatched.reset_index(drop=True).to_csv(OUTPUT_PATH/ "unmatched_result.csv", index=False)
+    dfs_summary.reset_index(drop=True).to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
     # the save the matched result and unmatched result to csv files
     # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")
     # dfs_unmatched.to_csv(OUTPUT_PATH / "unmatched_result.csv")

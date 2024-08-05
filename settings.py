@@ -5,7 +5,7 @@ import logging
 from collections import namedtuple
 
 # LOG_LEVEL=logging.INFO
-LOG_LEVEL=logging.INFO
+LOG_LEVEL=logging.DEBUG
 
 # output format for summary and detail
 

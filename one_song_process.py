@@ -329,6 +329,7 @@ def get_summary_data_from_client_df(df_client_song_input):
     df_client_song = df_client_song_input.copy()
     summary_by = ['cc_track']
     values_tobe_summed = ['c_revenue']
+    logging.debug("The list of versions are {}".format(df_client_song['cc_version'].unique()))
 
     versions = df_client_song['cc_version'].nunique()
     song_name = list(df_client_song['cc_track'])[0]
