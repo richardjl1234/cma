@@ -1,12 +1,12 @@
 import os, sys
 import pickle
 import logging
-from settings import LOG_PATH, OUTPUT_PATH, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, INPUT_FILE, INPUT_PATH
+from settings import LOG_PATH, OUTPUT_PATH, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, INPUT_FILE, INPUT_PATH, ARTIST_ALIAS
 from one_song_process import process_one_song
 from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
 import pandas as pd
-from modules.msv7 import save_to_excel_v2
+# from modules.msv7 import save_to_excel_v2
 
 # get the current date in format yyyymmdd
 from datetime import datetime
@@ -63,6 +63,13 @@ def get_song_statement_data(client_statement_file, input_folder= INPUT_PATH)   :
 
     return df_songs, song_names
 
+# implement a dictionary like mapping, and case insensitive
+def get_artist_alias(x):
+    for k, v in ARTIST_ALIAS.items():
+        if x.lower().strip() == k.lower().strip():
+            return v
+    return x
+
 
 def main():
     pickle_path = Path("output/pickle")
@@ -75,6 +82,11 @@ def main():
     ####################################################################################
     # get the artist names and dataframe 
     df_songs, song_names = get_song_statement_data(INPUT_FILE)
+
+    # replace the artist_names with alias included
+    df_songs["cc_artist"] = df_songs["cc_artist"].apply(get_artist_alias)
+
+    logging.info("The cc_artist column in client statement has included the alias name ...")
     logging.info("The number of artists is {}".format(len(song_names)))
 
     ## Resume the process from the last_process index number if the restart parameter is provided
@@ -112,18 +124,35 @@ def main():
 
     ######################################################
     # now get all the pickle files from output/pickle folder, read them and the merge them into final excel file in output folder
-    pickle_files = list(pickle_path.glob("*.pkl"))
     logging.info(" ###### Final Summarization ######")
-    logging.info("The number of pickle files is {}".format(len(pickle_files)))
+
+    pickle_files_details = list(pickle_path.glob("N*.pkl"))
+    logging.info("The number of pickle files is {}".format(len(pickle_files_details)))
+
     dfs_matched, dfs_unmatched  = pd.DataFrame(), pd.DataFrame() 
-    for file in pickle_files:
+    for file in pickle_files_details:
         matched_df, unmatched_df = pickle.load(open(file, 'rb'))
         logging.info("The matched df shape is {}, unmatched df shape is {}, filename is {}".format(matched_df.shape, unmatched_df.shape, file.name))  
         dfs_matched = pd.concat([dfs_matched, matched_df])
         dfs_unmatched = pd.concat([dfs_unmatched, unmatched_df])
 
+    pickle_files_summary = list(pickle_path.glob("summary*.pkl"))
+    logging.info("The number of summary pickle files is {}".format(len(pickle_files_summary)))
+
+    dfs_summary = pd.DataFrame()
+    for file in pickle_files_summary:
+        df_summary = pickle.load(open(file, 'rb'))
+        logging.info("The summary df shape is {}".format(df_summary.shape))  
+        dfs_summary = pd.concat([dfs_summary, df_summary])
+
     logging.info("The final matched df shape is {}, unmatched df shape is {}".format(dfs_matched.shape, dfs_unmatched.shape))
-    save_to_excel_v2(dfs_matched, dfs_unmatched, OUTPUT_PATH / "final_result.xlsx")
+    logging.info("the final summary df shape is {}".format(dfs_summary.shape))
+
+    # save_to_excel_v2_matched(dfs_matched, dfs_unmatched, OUTPUT_PATH / "final_result.xlsx")
+    # output all the result to the final excel file and csv file
+    dfs_matched.to_excel(OUTPUT_PATH / "matched_result_details.xlsx", index=True)
+    dfs_unmatched.to_csv(OUTPUT_PATH/ "unmatched_result.csv", index=False)
+    dfs_summary.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
     # the save the matched result and unmatched result to csv files
     # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")
     # dfs_unmatched.to_csv(OUTPUT_PATH / "unmatched_result.csv")

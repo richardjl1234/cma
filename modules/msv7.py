@@ -10,8 +10,15 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from settings import   LOG_LEVEL
 from modules.common import timeit
 
-CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 'Unique Song ID', 'Unique Version ID', 'c_album', 'c_platform']
-PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 'pc_artist', 'pc_version', 'refine_process_comment', 'refine_similarity', 'p_platform', 'p_album'] 
+CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 
+               'Unique Song ID', 'Unique Version ID', 
+               'c_album', 'c_platform',
+               'c_revenue']
+PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 
+                 'pc_artist', 'pc_version', 'refine_process_comment', 
+                 'refine_similarity', 'p_platform', 'p_album', 
+                 'p_comments', 
+                 'p_likes_count', 'p_stream_count_1', 'p_stream_count_2'] 
 
 
 def extract_columns(excel_path, csv_path):
@@ -130,7 +137,7 @@ def save_to_excel(matched_df, unmatched_df, output_path):
       
    logging.info("📊 Data saved to Excel. Check the output file at: {}".format(str(output_path)) )
 
-def save_to_excel_v2(matched_df, unmatched_df, output_excel_path, output_pickle_path = None):
+def save_result_to_excel_or_pickle(matched_df, unmatched_df, output_excel_path, output_pickle_path = None):
    """
    Save the results to the 'matched_results.xlsx' workbook.
    """

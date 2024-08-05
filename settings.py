@@ -7,10 +7,20 @@ from collections import namedtuple
 # LOG_LEVEL=logging.INFO
 LOG_LEVEL=logging.INFO
 
-# TODO, the platform qqmusicv2 need to added, but now the performance is not good, so it is not ready to be added
-PLATFORMS = ('netease_max', 'kugou',)
+# output format for summary and detail
+
+# artist alias mapping
+ARTIST_ALIAS = {
+    "Two Steps From Hell": "Two Steps From Hell, Thomas Bergerson, Thomas Bergersen"
+}
+
+# The platform names from client statements (in lower case)
+PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['netease', 'tencent']
+
+# The platform database names to be included
+PLATFORMS_DB_IN_SCOPE = ('netease_max', 'kugou', 'qqmusicv2')
 # PLATFORMS = ('qqmusicv2', )
-#PLATFORMS = ( 'kugou', )
+# PLATFORMS = ( 'kugou', )
 
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
@@ -18,17 +28,17 @@ OUTPUT_PATH = Path('output') # specify the folder where the output files to be s
 # the input file should be in the input_data folder, the format can be xlsx, csv or pkl
 INPUT_PATH = "input_data"
 # INPUT_FILE = "cc_soave.pkl"  
-INPUT_FILE = "Two Steps Test_new.xlsx"  
+INPUT_FILE = "Two Steps Test.xlsx"  
 # INPUT_FILE = "cc_soave.xlsx"  
 # INPUT_FILE = "cc_twosteps.xlsx"  
 
 # This is useful when we need to resume the process from the previous aborted process 
-START_SONG_INDEX = 0 # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 1000 # specfiy when the process will be stopped
+START_SONG_INDEX = 0  # specfiy the start song index. This index is INCLUDED
+END_SONG_INDEX = 99 # specfiy when the process will be stopped
 
 # include the refine_similarity_level_2 records, level 2 are the rows with exact matching on song name, but does not match on singer name and alblum name
-# similarity level 1, song name match + artist name match
-# similarity level 2, song name mathc + album name match
+# similarity level 1, song name match + artist name match + album name exact match
+# similarity level 2, song name match + album name match
 # similarity level 3, song name match only
 # when the value is 1, it will only return the level 1 rows
 # when the value is 2, it will return the level 1 and 2 rows
@@ -77,7 +87,7 @@ COLUMN_MAPPING = {
 ##############################################################
 # generate the connection parameter for a platform, it returns the connection parameters when connect to the postgresql database
 def get_conn_params(platform):
-    if platform not in PLATFORMS: 
+    if platform not in PLATFORMS_DB_IN_SCOPE: 
         raise ValueError(f"invalid platform {platform}") 
         return None
     return ConnParams(os.environ["POSTGRE_HOST"], 5432,platform,  os.environ["POSTGRE_USER"], os.environ["POSTGRE_PWD"] ) 
