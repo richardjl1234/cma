@@ -79,23 +79,12 @@ def main():
     pickle_path = Path("output/pickle")
     excel_path = Path("output/excel")
 
+    ####################################################################################
     # archive the files in OUTPUT_PATH to OUTPUT_PATH/ "archive" folder, filename is attached with the current date
     for file in chain(OUTPUT_PATH.glob("*.xlsx"), OUTPUT_PATH.glob("*.csv")):
         os.rename(file, OUTPUT_PATH / "archive" / (file.name + '.' + str(today)))
     
     ####################################################################################
-    # get the artist names and dataframe 
-    df_songs, song_names = get_song_statement_data(INPUT_FILE)
-    logging.info("The dataframe of the input client statements has {} rows".format(df_songs.shape[0]))
-    
-    logging.debug('\n'.join(song_names[START_SONG_INDEX: END_SONG_INDEX + 1]))
-
-    # replace the artist_names with alias included
-    df_songs["cc_artist"] = df_songs["cc_artist"].apply(get_artist_alias)
-
-    logging.info("The cc_artist column in client statement has included the alias name ...")
-    logging.info("The number of artists is {}".format(len(song_names)))
-
     ## Resume the process from the last_process index number if the restart parameter is provided
     if len(sys.argv) >= 2 and sys.argv[1] == 'restart':
         # read the pickle file snapshot.pkl, into the following variables
@@ -107,9 +96,9 @@ def main():
     else: 
         # get the input from the user to confirm if the pickle files and excels should be deleted or not
         # if answer is yes, proceed , if the answer is no, stop the process
-        answer = input("The cached pickle files in folder {} and excel files in folder {} will be deleted. (Y/N)".format(pickle_path, excel_path))
+        answer = input("The cached pickle files in folder {} and excel files in folder {} will be deleted. \n Please use 'main.py restart' if you want to start from the previous checkpoint...(Y/N)".format(pickle_path, excel_path))
         if answer.lower() == 'n':
-            logging.Warning("The process is stopped")
+            logging.warning("The process is stopped")
             exit()
 
         ######################################################
@@ -124,6 +113,20 @@ def main():
         logging.info("<<<<< The program STARTED from the song index {} >>>>>>".format(START_SONG_INDEX))
         start_song_index = START_SONG_INDEX
 
+    ####################################################################################
+    # get the artist names and dataframe 
+    df_songs, song_names = get_song_statement_data(INPUT_FILE)
+    logging.info("The dataframe of the input client statements has {} rows".format(df_songs.shape[0]))
+    
+    logging.debug('\n'.join(song_names[START_SONG_INDEX: END_SONG_INDEX + 1]))
+
+    # replace the artist_names with alias included
+    df_songs["cc_artist"] = df_songs["cc_artist"].apply(get_artist_alias)
+
+    logging.info("The cc_artist column in client statement has included the alias name ...")
+    logging.info("The number of artists is {}".format(len(song_names)))
+    
+    ####################################################################################
     # now process the song one by one
     logging.warning("^^^^^ The song index which less than {} are skipped...\n".format(start_song_index))
     for song_index, song_name in enumerate(song_names[start_song_index: END_SONG_INDEX + 1]):
