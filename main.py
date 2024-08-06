@@ -6,6 +6,7 @@ from one_song_process import process_one_song
 from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
 import pandas as pd
+from itertools import chain
 # from modules.msv7 import save_to_excel_v2
 
 # get the current date in format yyyymmdd
@@ -77,14 +78,17 @@ def get_artist_alias(x):
 def main():
     pickle_path = Path("output/pickle")
     excel_path = Path("output/excel")
-    # move the final_result.xlsx to the archive folder
-    final_result_file = OUTPUT_PATH / 'final_result.xlsx'
-    if final_result_file.exists():
-        os.rename(final_result_file, OUTPUT_PATH / "archive" / final_result_file.name)
 
+    # archive the files in OUTPUT_PATH to OUTPUT_PATH/ "archive" folder, filename is attached with the current date
+    for file in chain(OUTPUT_PATH.glob("*.xlsx"), OUTPUT_PATH.glob("*.csv")):
+        os.rename(file, OUTPUT_PATH / "archive" / (file.name + '.' + str(today)))
+    
     ####################################################################################
     # get the artist names and dataframe 
     df_songs, song_names = get_song_statement_data(INPUT_FILE)
+    logging.info("The dataframe of the input client statements has {} rows".format(df_songs.shape[0]))
+    
+    logging.debug('\n'.join(song_names[START_SONG_INDEX: END_SONG_INDEX + 1]))
 
     # replace the artist_names with alias included
     df_songs["cc_artist"] = df_songs["cc_artist"].apply(get_artist_alias)
@@ -101,6 +105,13 @@ def main():
         logging.info("<<<<< The program RESTARTED from the song index {} >>>>>>".format(restart_song_index))
         start_song_index = int(restart_song_index) 
     else: 
+        # get the input from the user to confirm if the pickle files and excels should be deleted or not
+        # if answer is yes, proceed , if the answer is no, stop the process
+        answer = input("The cached pickle files in folder {} and excel files in folder {} will be deleted. (Y/N)".format(pickle_path, excel_path))
+        if answer.lower() == 'n':
+            logging.Warning("The process is stopped")
+            exit()
+
         ######################################################
         # remove all the pick fills in the pickle_path and excel_path
         for file in pickle_path.glob("*.pkl"):

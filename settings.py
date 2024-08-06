@@ -5,7 +5,7 @@ import logging
 from collections import namedtuple
 
 # LOG_LEVEL=logging.INFO
-LOG_LEVEL=logging.DEBUG
+LOG_LEVEL=logging.INFO
 
 # output format for summary and detail
 
@@ -28,13 +28,13 @@ OUTPUT_PATH = Path('output') # specify the folder where the output files to be s
 # the input file should be in the input_data folder, the format can be xlsx, csv or pkl
 INPUT_PATH = "input_data"
 # INPUT_FILE = "cc_soave.pkl"  
-INPUT_FILE = "Two Steps Test.xlsx"  
+# INPUT_FILE = "Two Steps Test.xlsx"  
 # INPUT_FILE = "cc_soave.xlsx"  
-# INPUT_FILE = "cc_twosteps.xlsx"  
+INPUT_FILE = "cc_twosteps.xlsx"  
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_SONG_INDEX = 0  # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 99 # specfiy when the process will be stopped
+END_SONG_INDEX = 50 # specfiy when the process will be stopped
 
 # include the refine_similarity_level_2 records, level 2 are the rows with exact matching on song name, but does not match on singer name and alblum name
 # similarity level 1, song name match + artist name match + album name exact match

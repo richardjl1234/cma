@@ -295,7 +295,7 @@ def customized_summary(series):
 
 # get the summary comments, likes and streams based on the match_df
 def get_summary_from_platform_matched_df(temp_df):
-    if temp_df.empty: return pd.DataFrame()
+    if temp_df.empty: return pd.DataFrame(columns = ['cc_track'])
 
     matched_df = temp_df.copy()
     matched_df = matched_df.loc[:, ['cc_track', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams']]
