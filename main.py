@@ -180,6 +180,7 @@ def main():
 
     dfs_summary_final = dfs_summary.reset_index(drop=True).sort_index(level=[0,1], axis=1)
     dfs_summary_final.columns = [col[1] for col in dfs_summary_final.columns.values] # only keep the level 1 index
+    dfs_summary_final['matched count'] = dfs_summary_final['matched count'].fillna(0).astype(int)
     dfs_summary_final.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
     # the save the matched result and unmatched result to csv files
     # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")

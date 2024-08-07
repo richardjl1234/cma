@@ -35,22 +35,19 @@ PLATFORM_MAPPING = {
 }
 
 
-# PLATFORMS = ('qqmusicv2', )
-# PLATFORMS = ( 'kugou', )
-
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
 
 # the input file should be in the input_data folder, the format can be xlsx, csv or pkl
 INPUT_PATH = "input_data"
-# INPUT_FILE = "cc_soave.pkl"  
-INPUT_FILE = "Two Steps Test.xlsx"  
+INPUT_FILE = "cc_soave.pkl"  
+# INPUT_FILE = "Two Steps Test.xlsx"  
 # INPUT_FILE = "cc_soave.xlsx"  
 # INPUT_FILE = "cc_twosteps.xlsx"  
 
 # This is useful when we need to resume the process from the previous aborted process 
-START_SONG_INDEX = 0  # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 10 # specfiy when the process will be stopped
+START_SONG_INDEX = 51  # specfiy the start song index. This index is INCLUDED
+END_SONG_INDEX = 100 # specfiy when the process will be stopped
 
 # include the refine_similarity_level_2 records, level 2 are the rows with exact matching on song name, but does not match on singer name and alblum name
 # similarity level 1, song name match + artist name match + album name exact match
