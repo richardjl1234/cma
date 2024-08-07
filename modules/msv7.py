@@ -7,7 +7,7 @@ import pickle
 # Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
-from settings import   LOG_LEVEL
+from settings import   LOG_LEVEL, VERSION_ALIAS
 from modules.common import timeit
 
 CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 
@@ -188,8 +188,8 @@ def filter_song_name(row, song_name ):
 # pc_artist could a list of artist which are separated by ,
 def filter_artist_names(row, artist_names_c):
     # Replace the char '、' to ',' so that we can split by comma
-    artist_names_in_pc_artist_column = row['pc_artist'].replace('、', ',').split(',') 
-    artist_names_in_cc_artist_column = artist_names_c.replace('、', ',').split(',')
+    artist_names_in_pc_artist_column = row['pc_artist'].replace('、', ',').replace('|', ',').split(',') 
+    artist_names_in_cc_artist_column = artist_names_c.replace('、', ',').replace('|', ',').split(',')
 
     result = any(name.lower().strip() == pc_artist_name.lower().strip()
                for name in artist_names_in_cc_artist_column 
@@ -205,7 +205,8 @@ def filter_album_name(row, album_name):
 
 # define the filter for song_versions
 def filter_version(row, song_version, song_versions): # song_versions are the all versions in the client statements
-    p_song_versions = row['pc_version'].replace('、', ',').split(',') 
+    p_song_versions = row['pc_version'].replace('、', ',').replace('|', ',').split(',') 
+    p_song_versions = [VERSION_ALIAS.get(version.strip(), version)   for version in p_song_versions] # replace the alias in version list
     # a = song_version.lower().strip() == row['pc_version'].lower().strip()
     a = any(song_version.lower().strip() == p_song_version.strip() for p_song_version in p_song_versions)
     # b = (song_version.lower().strip() == 'generic' and row['pc_version'].lower().strip() not in song_versions)

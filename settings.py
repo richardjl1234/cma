@@ -14,11 +14,27 @@ ARTIST_ALIAS = {
     "Two Steps From Hell": "Two Steps From Hell, Thomas Bergerson, Thomas Bergersen"
 }
 
+VERSION_ALIAS = {
+    'inst':'instrumental'
+}
+
 # The platform names from client statements (in lower case)
 PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['netease', 'tencent']
 
 # The platform database names to be included
 PLATFORMS_DB_IN_SCOPE = ('netease_max', 'kugou', 'qqmusicv2')
+
+# The following provide mapping between platform db and the platform name in the client statement
+TENCENT_COVERAGE = ['kugou', 'qqmusicv2']
+PLATFORM_MAPPING = {
+    'netease_max': 'netease',  # provide platform db mapped to platform name in client statement
+    'kugou': 'tencent',  # provide platform db mapped to platform name in client statement
+    'qqmusicv2': 'tencent', # provide platform db mapped to platform name in client statement
+    'netease': 'netease',  # handle netease c_revenue
+    'tencent': 'tencent' # handle tencent c_revenue
+}
+
+
 # PLATFORMS = ('qqmusicv2', )
 # PLATFORMS = ( 'kugou', )
 
@@ -28,13 +44,13 @@ OUTPUT_PATH = Path('output') # specify the folder where the output files to be s
 # the input file should be in the input_data folder, the format can be xlsx, csv or pkl
 INPUT_PATH = "input_data"
 # INPUT_FILE = "cc_soave.pkl"  
-# INPUT_FILE = "Two Steps Test.xlsx"  
+INPUT_FILE = "Two Steps Test.xlsx"  
 # INPUT_FILE = "cc_soave.xlsx"  
-INPUT_FILE = "cc_twosteps.xlsx"  
+# INPUT_FILE = "cc_twosteps.xlsx"  
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_SONG_INDEX = 0  # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 50 # specfiy when the process will be stopped
+END_SONG_INDEX = 10 # specfiy when the process will be stopped
 
 # include the refine_similarity_level_2 records, level 2 are the rows with exact matching on song name, but does not match on singer name and alblum name
 # similarity level 1, song name match + artist name match + album name exact match

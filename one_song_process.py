@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 import pandas as pd
 from settings import  OUTPUT_PATH, PLATFORMS_DB_IN_SCOPE, get_conn_params, COLUMN_MAPPING, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, DataFeed, PLATFORM_IN_SCOPE_CLIENT_STATEMENT
-# from settings import SUMMARY_OUTPUT_COLUMNS
+from settings import PLATFORM_MAPPING
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
 from modules.rds_access import execute_sql_query_retriable, DatabaseQueryException
 
@@ -21,7 +21,7 @@ from modules.msv7 import preprocess_data, match_tracks_v2,  CLIENT_COLS, PLATFOR
 
 pd.options.mode.chained_assignment = None
 
-SUMMARY_OUTPUT_COLUMNS = [ 'Total Comment', "Total Revenue", "cc_track", "versions", ]
+SUMMARY_OUTPUT_COLUMNS = [ 'Total Comment', "Total Revenue", "cc_track", "cc_version", ]
 DROP_COLUMNS = ['p_stream_count_1', 'p_stream_count_2', 'c_platform', 'c_revenue', 'match_id', 'p_track', 'c_track' ]
 
 # @timeit
@@ -253,7 +253,7 @@ def process_one_song(song_index, song_name, df_client_song):
 
         # now merge the match_summary_df with the summary data from the client statements
         logging.debug(str(df_summary_client))
-        df_summary_client = df_summary_client.merge(matched_summary_df, on='cc_track', how='left')
+        df_summary_client = df_summary_client.merge(matched_summary_df, on=['cc_track','cc_version'], how='left')
 
         # add the total revenue and total comment columns
         df_summary_client['Total Revenue'] = df_summary_client.apply(
@@ -264,10 +264,16 @@ def process_one_song(song_index, song_name, df_client_song):
         # reorg the column sequence
         columns = SUMMARY_OUTPUT_COLUMNS + sorted([
             x for x in df_summary_client.columns if x not in SUMMARY_OUTPUT_COLUMNS]) 
+        
         df_summary_client = df_summary_client.loc[:, columns]
 
-        logging.info("now output the merged summary data to output folder")
-        df_summary_client.to_excel(OUTPUT_PATH / "excel" / "summary_{}.xlsx".format('_'.join(song_name.split())), index=False)
+        # create the 2 level column name so that the columns of same category can be clustered.
+        columns_new = [(PLATFORM_MAPPING.get(col.split()[0], '')   , col)   for col in columns]
+        # create the multiple level column from the columns_new tuples
+        df_summary_client.columns = pd.MultiIndex.from_tuples(columns_new)
+
+        logging.info("now output the merged summary data to output folder for song {}".format(song_name))
+        df_summary_client.to_excel(OUTPUT_PATH / "excel" / "summary_{}.xlsx".format('_'.join(song_name.split())))
         df_summary_client.to_pickle(OUTPUT_PATH / "pickle" / "summary_{}.pkl".format('_'.join(song_name.split())) )
 
         single_result_excel_path = OUTPUT_PATH / "excel" / "N{:06d}-{}-matched_v4.xlsx".format(song_index,'_'.join( song_name.split()))
@@ -295,21 +301,25 @@ def customized_summary(series):
 
 # get the summary comments, likes and streams based on the match_df
 def get_summary_from_platform_matched_df(temp_df):
-    if temp_df.empty: return pd.DataFrame(columns = ['cc_track'])
+    if temp_df.empty: return pd.DataFrame(columns = ['cc_track', 'cc_version'])
 
     matched_df = temp_df.copy()
-    matched_df = matched_df.loc[:, ['cc_track', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams']]
+    matched_df = matched_df.loc[:, ['cc_track',  'cc_version', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams']]
     logging.debug(str(matched_df))
     # add dummary row for each in-scope platform
     song_name = list(matched_df['cc_track'])[0]
+    versions = matched_df['cc_version'].unique()
     for platform in PLATFORMS_DB_IN_SCOPE:
-        matched_df = append_row(matched_df, {'cc_track': song_name, 'p_platform': platform, 'p_comments': 0, 'p_likes_count': 0, 'p_streams': 0})
+        for version in versions: 
+            matched_df = append_row(matched_df, {'cc_track': song_name, 'cc_version': version, 'p_platform': platform, 'p_comments': 0, 'p_likes_count': 0, 'p_streams': 0})
     
-    matched_summary = matched_df.groupby(['cc_track', 'p_platform'])[['p_comments', 'p_likes_count', 'p_streams']].agg(customized_summary)
+    matched_summary = matched_df.groupby(['cc_track', 'cc_version', 'p_platform'])[['p_comments', 'p_likes_count', 'p_streams']].agg(customized_summary)
     logging.debug(str(matched_summary))
     # matched_summary = matched_summary.rename(columns={'p_comments': 'comments', 'p_likes_count': 'likes'})
     # matched_summary.drop(columns=['streams_v1', 'streams_v2'], inplace=True)
     matched_summary = matched_summary.unstack()
+    matched_summary['matched count'] = matched_df.groupby(['cc_track', 'cc_version']).size()
+
     matched_summary.columns = [' '.join(reversed(col)).strip('_') for col in matched_summary.columns.values]
     matched_summary.reset_index(inplace=True)
     return matched_summary
@@ -327,11 +337,13 @@ def get_summary_data_from_client_df(df_client_song_input):
     # summary_by = ['Unique Song ID', 'Unique Version ID', 'c_platform']
     # summary_by = ['cc_track', 'cc_version', 'c_album']
     df_client_song = df_client_song_input.copy()
-    summary_by = ['cc_track']
+    summary_by = ['cc_track', 'cc_version']
     values_tobe_summed = ['c_revenue']
     logging.debug("The list of versions are {}".format(df_client_song['cc_version'].unique()))
 
-    versions = df_client_song['cc_version'].nunique()
+    # get the unique value for cc_version column in df_client_song
+    versions = df_client_song['cc_version'].unique()
+
     song_name = list(df_client_song['cc_track'])[0]
     logging.info("There are {} versions for song {}".format(versions, song_name))
 
@@ -340,10 +352,11 @@ def get_summary_data_from_client_df(df_client_song_input):
     df_client_song['cc_version'] = df_client_song['cc_version'].fillna('generic')
 
 
-    # add a dummy row with zero value
+    # add a dummy row with zero value for each platform and version
     for platform in PLATFORM_IN_SCOPE_CLIENT_STATEMENT:
-        dummy_row = {'cc_track': song_name, 'c_platform': platform, 'c_revenue': 0}
-        df_client_song = append_row(df_client_song, dummy_row)
+        for version in versions: 
+            dummy_row = {'cc_track': song_name, 'cc_version':version, 'c_platform': platform, 'c_revenue': 0}
+            df_client_song = append_row(df_client_song, dummy_row)
 
     df_client_song = df_client_song.loc[:, [*summary_by, 'c_platform', *values_tobe_summed]]
     #df_client_song.to_excel('temp/client_song_origin.xlsx')
@@ -353,7 +366,7 @@ def get_summary_data_from_client_df(df_client_song_input):
     df_summary.columns = [ ' '.join(reversed(cols)) for cols in df_summary.columns]
 
     df_summary.reset_index(inplace=True)
-    df_summary['versions'] = versions
+    # df_summary['versions'] = versions
 
     # now rename the columns name 
 

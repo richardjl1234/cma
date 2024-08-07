@@ -2,6 +2,7 @@ import os, sys
 import pickle
 import logging
 from settings import LOG_PATH, OUTPUT_PATH, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, INPUT_FILE, INPUT_PATH, ARTIST_ALIAS
+from settings import TENCENT_COVERAGE
 from one_song_process import process_one_song
 from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
@@ -169,11 +170,20 @@ def main():
     # output all the result to the final excel file and csv file
     dfs_matched.reset_index(drop=True).to_excel(OUTPUT_PATH / "matched_result_details.xlsx", index=True)
     dfs_unmatched.reset_index(drop=True).to_csv(OUTPUT_PATH/ "unmatched_result.csv", index=False)
-    dfs_summary.reset_index(drop=True).to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
+    logging.debug(dfs_summary.columns)
+
+    # special logic to calculate the total comment for those tencent related platform
+    dfs_summary[('tencent', 'tencent total comments')] = dfs_summary.apply(
+        lambda row: sum( [row[('tencent', '{} p_comments'.format(p))] 
+             for p in TENCENT_COVERAGE]), 
+             axis=1)
+
+    dfs_summary_final = dfs_summary.reset_index(drop=True).sort_index(level=[0,1], axis=1)
+    dfs_summary_final.columns = [col[1] for col in dfs_summary_final.columns.values] # only keep the level 1 index
+    dfs_summary_final.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
     # the save the matched result and unmatched result to csv files
     # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")
     # dfs_unmatched.to_csv(OUTPUT_PATH / "unmatched_result.csv")
-        
 
     logging.info("The program finished...")
     logging.debug("The function time dict is:\n {}".format(FUNC_TIME_DICT))
