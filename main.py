@@ -2,7 +2,7 @@ import os, sys
 import pickle
 import logging
 from settings import LOG_PATH, OUTPUT_PATH, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, INPUT_FILE, INPUT_PATH, ARTIST_ALIAS
-from settings import TENCENT_COVERAGE
+from settings import TENCENT_COVERAGE, FINAL_COLUMN_MAPPING, PLATFORM_IN_SCOPE_CLIENT_STATEMENT
 from one_song_process import process_one_song
 from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
@@ -75,6 +75,14 @@ def get_artist_alias(x):
             return v
     return x
 
+# function to merge the df_songs_summary (from client statement) and dfs_client_platform_merged (from the match result)
+def merge_summary_data(df_songs_summary, dfs_client_platform_merged):
+    # pass
+    # dfs_client_platform_merged = df_songs_summary.merge(dfs_client_platform_merged, how='left', on=['cc_track', 'cc_version'])
+    return dfs_client_platform_merged
+
+
+
 
 def main():
     pickle_path = Path("output/pickle")
@@ -117,12 +125,13 @@ def main():
     ####################################################################################
     # get the artist names and dataframe 
     df_songs, song_names = get_song_statement_data(INPUT_FILE)
+    
     logging.info("The dataframe of the input client statements has {} rows".format(df_songs.shape[0]))
     
     logging.debug('\n'.join(song_names[START_SONG_INDEX: END_SONG_INDEX + 1]))
 
     # replace the artist_names with alias included
-    df_songs["cc_artist"] = df_songs["cc_artist"].apply(get_artist_alias)
+    # df_songs["cc_artist"] = df_songs["cc_artist"].apply(get_artist_alias)
 
     logging.info("The cc_artist column in client statement has included the alias name ...")
     logging.info("The number of artists is {}".format(len(song_names)))
@@ -136,6 +145,8 @@ def main():
 
         # get the df_song which for this song only
         df_client_song = df_songs.loc[df_songs['cc_track'].str.strip("'").str.strip('"').str.strip().str.lower() == song_name.lower()]
+        # add the alias name for the artist
+        df_client_song["cc_artist"] = df_client_song["cc_artist"].apply(get_artist_alias)
 
         logging.info("The shape of df_song is {}".format(df_client_song.shape))
         process_one_song(actual_song_index, song_name, df_client_song)
@@ -178,10 +189,34 @@ def main():
              for p in TENCENT_COVERAGE]), 
              axis=1)
 
-    dfs_summary_final = dfs_summary.reset_index(drop=True).sort_index(level=[0,1], axis=1)
-    dfs_summary_final.columns = [col[1] for col in dfs_summary_final.columns.values] # only keep the level 1 index
-    dfs_summary_final['matched count'] = dfs_summary_final['matched count'].fillna(0).astype(int)
-    dfs_summary_final.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
+    dfs_client_platform_merged = dfs_summary.reset_index(drop=True).sort_index(level=[0,1], axis=1)
+    dfs_client_platform_merged.columns = [col[1] for col in dfs_client_platform_merged.columns.values] # only keep the level 1 index
+    logging.info("The columns of final summary dataframe is {}".format(dfs_client_platform_merged.columns))
+    dfs_client_platform_merged.columns = [col.strip() for col in dfs_client_platform_merged.columns]
+    dfs_client_platform_merged['matched count'] = dfs_client_platform_merged['matched count'].fillna(0).astype(int)
+    
+    # before dfs_summary_final save to disk, merge the data with the df_songs (the client statement)
+    # only get the result for inscope data
+    df_songs['c_platform'] = df_songs['c_platform'].str.strip()
+    filter_platform = df_songs['c_platform'].apply(lambda x: x.lower() in PLATFORM_IN_SCOPE_CLIENT_STATEMENT)
+    df_songs = df_songs.loc[filter_platform, :]
+    df_songs_summary = df_songs.groupby(by=['cc_track', 'cc_version', 'c_platform'])[['c_revenue', 'c_streams']].agg(sum)
+    df_songs_summary = df_songs_summary.unstack() # move c_platform to column first level index
+
+    # now get the dictionay for artist name and track title
+    df_songs.set_index(['cc_track', 'cc_version'], inplace=True)
+    artist_dict = df_songs['Artist Name'].to_dict()
+    track_title_dict = df_songs['Track Title'].to_dict()
+    logging.debug("The artist dict is {}".format(artist_dict))
+    logging.debug("The track title dict is {}".format(track_title_dict))
+    df_songs_summary['Artist Name'] = df_songs_summary.index.map(artist_dict)
+    df_songs_summary['Track Title'] = df_songs_summary.index.map(track_title_dict)
+    df_songs_summary.to_excel(OUTPUT_PATH / 'debug'/ "df_songs_summary.xlsx")
+    logging.debug("The df_songs_summary has been output to the output folder")
+
+    # merget the df_songs_summary and dfs_client_platform_merged into final excel file
+    df_summary_final = merge_summary_data(df_songs_summary, dfs_client_platform_merged)
+    df_summary_final.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
     # the save the matched result and unmatched result to csv files
     # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")
     # dfs_unmatched.to_csv(OUTPUT_PATH / "unmatched_result.csv")

@@ -9,7 +9,7 @@ LOG_LEVEL=logging.INFO
 
 # output format for summary and detail
 
-# artist alias mapping
+# artist and version alias mapping
 ARTIST_ALIAS = {
     "Two Steps From Hell": "Two Steps From Hell, Thomas Bergerson, Thomas Bergersen"
 }
@@ -34,30 +34,42 @@ PLATFORM_MAPPING = {
     'tencent': 'tencent' # handle tencent c_revenue
 }
 
+# The column mapping from intermediate result to final
+FINAL_COLUMN_MAPPING = {
+    "Artist Name": ("Catalog Metadata", "Artist Name"), 
+    "Track Name": ("Catalog Metadata", "Track Name"), 
+    "Unclaimed Matches": ("Catalog Overview", "Unclaimed Matches"),
+    "Claimed Matches": ("Catalog Overview", "Claimed Matches"), 
+    "Total Revenue": ("Catalog Overview", "Total Revenue"), 
+    "Total Stream": ("Catalog Overview", "Total Stream"), 
+    "Estimated Revenue": ("Catalog Overview", "Estimated Revenue"), 
+    "Estimated Stream": ("Catalog Overview", "Estimated Stream"), 
+    "Total Comments": ("Catalog Overview", "Total Comments"), 
+    "Total Favorites": ("Catalog Overview", "Total Favorites"), 
+    "Total Matches": ("NetEase Cloud Music", "Total Matches"), 
+    "Claimed Matches": ("NetEase Cloud Music", "Claimed Matches"), 
+    "Unclaimed Matches": ("NetEase Cloud Music", "Unclaimed Matches"), 
+    "Revenue": ("NetEase Cloud Music", "Revenue"), 
+    "Comments (Claimed)": ("NetEase Cloud Music", "Comments (Claimed)"), 
+    "Favorites (Claimed)": ("NetEase Cloud Music", "Favorites (Claimed)"), 
+    "Comments (Unclaimed)": ("NetEase Cloud Music", "Comments (Unclaimed)"), 
+    "Favorites (Unclaimed)": ("NetEase Cloud Music", "Favorites (Unclaimed)"), 
+}
 
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
 
 # the input file should be in the input_data folder, the format can be xlsx, csv or pkl
 INPUT_PATH = "input_data"
-INPUT_FILE = "cc_soave.pkl"  
+ 
+# INPUT_FILE = "cc_soave.pkl"  
 # INPUT_FILE = "Two Steps Test.xlsx"  
 # INPUT_FILE = "cc_soave.xlsx"  
-# INPUT_FILE = "cc_twosteps.xlsx"  
+INPUT_FILE = "cc_twosteps.pkl"  
 
 # This is useful when we need to resume the process from the previous aborted process 
-START_SONG_INDEX = 51  # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 100 # specfiy when the process will be stopped
-
-# include the refine_similarity_level_2 records, level 2 are the rows with exact matching on song name, but does not match on singer name and alblum name
-# similarity level 1, song name match + artist name match + album name exact match
-# similarity level 2, song name match + album name match
-# similarity level 3, song name match only
-# when the value is 1, it will only return the level 1 rows
-# when the value is 2, it will return the level 1 and 2 rows
-# when the value is 3, it will return all the rows
-# default, we should use 2, which means we will return the level 1 and 2 rows
-# INCLUDE_REFINE_SIMILARITY_LEVEL = 3 
+START_SONG_INDEX = 2  # specfiy the start song index. This index is INCLUDED
+END_SONG_INDEX = 2 # specfiy when the process will be stopped
 
 ##############################################################
 # the column mapping from query result to the pc_columns

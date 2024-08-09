@@ -21,7 +21,7 @@ from modules.msv7 import preprocess_data, match_tracks_v2,  CLIENT_COLS, PLATFOR
 
 pd.options.mode.chained_assignment = None
 
-SUMMARY_OUTPUT_COLUMNS = [ 'Total Comment', "Total Revenue", "cc_track", "cc_version", ]
+SUMMARY_OUTPUT_COLUMNS = [ 'Total Comment', "Total Revenue",'Total Streams',  "cc_track", "cc_version", ]
 DROP_COLUMNS = ['p_stream_count_1', 'p_stream_count_2', 'c_platform', 'c_revenue', 'match_id', 'p_track', 'c_track' ]
 
 # @timeit
@@ -221,6 +221,7 @@ def process_one_song(song_index, song_name, df_client_song):
     try: 
         # To the final match between the client statements and the platform data
         matched_df, unmatched_df = match_tracks_v2(df_client_song,df_platform_concat_all)
+        print(matched_df.columns, '----------------')
         # sort the values based on the comments in descending order
         if not unmatched_df.empty:
             logging.info("now sort the values in unmatched dataframe based on the comments count...")
@@ -231,6 +232,8 @@ def process_one_song(song_index, song_name, df_client_song):
 
         # add the new column p_streams and then remove the unnecessary columns
         if not matched_df.empty: 
+            matched_df['p_stream_count_1'] = matched_df['p_stream_count_1'].fillna(0)
+            matched_df['p_stream_count_2'] = matched_df['p_stream_count_2'].fillna(0)
             matched_df['p_streams'] = matched_df.apply(
                     lambda row: 'NA' if (row['p_stream_count_1'] == 'NA' or row['p_stream_count_2'] == 'NA') 
                     else max([row['p_stream_count_1'], row['p_stream_count_2']]), 
@@ -238,7 +241,9 @@ def process_one_song(song_index, song_name, df_client_song):
             matched_df.drop(columns= DROP_COLUMNS, inplace=True)
 
             # move the p_streams column right after the p_likes_count column
+
             temp_cols = list(matched_df.columns)
+            # print(temp_cols)
             temp_cols.remove('p_streams')
             temp_cols.remove('refine_process_comment')
             temp_cols.remove('refine_similarity')
@@ -246,6 +251,7 @@ def process_one_song(song_index, song_name, df_client_song):
             temp_cols.insert(temp_cols.index('p_likes_count')+1, 'p_streams')
             temp_cols.append('refine_process_comment')
             temp_cols.append('refine_similarity')
+            # print(temp_cols)
             matched_df = matched_df.loc[:, temp_cols]
 
         # now create the summary df for the current song
@@ -258,6 +264,8 @@ def process_one_song(song_index, song_name, df_client_song):
         # add the total revenue and total comment columns
         df_summary_client['Total Revenue'] = df_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'c_revenue' in idx), axis=1)
+        df_summary_client['Total Streams'] = df_summary_client.apply(
+            lambda row: sum(row[idx] for idx in row.index if 'c_streams' in idx), axis=1)
         df_summary_client['Total Comment'] = df_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'p_comments' in idx), axis=1)
 
@@ -304,21 +312,50 @@ def get_summary_from_platform_matched_df(temp_df):
     if temp_df.empty: return pd.DataFrame(columns = ['cc_track', 'cc_version'])
 
     matched_df = temp_df.copy()
-    matched_df = matched_df.loc[:, ['cc_track',  'cc_version', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams']]
+    matched_df = matched_df.loc[:, ['cc_track',  'cc_version', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams', 'pc_version']]
     logging.debug(str(matched_df))
     # add dummary row for each in-scope platform
     song_name = list(matched_df['cc_track'])[0]
     versions = matched_df['cc_version'].unique()
+    # get the matched count series
+    matched_count_series = matched_df.groupby(['cc_track', 'cc_version']).size()
+    all_values_combination = matched_df.set_index(['cc_track', 'cc_version', 'p_platform']).index.unique()
+    # print(f"{all_values_combination =}")
+
+    # print(matched_df.columns)
+    # now get the matched and unmatched count 
+    matched_count_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'], 
+                                         :].groupby(['cc_track', 'cc_version', 'p_platform']).size() # claimed match
+    matched_count_by_db = matched_count_by_db.reindex(all_values_combination, fill_value = 0) ## TODO need to refinement
+    matched_count_by_db.name = 'claimed matched count'
+    # print(matched_count_by_db)
+
+    unmatched_count_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'], 
+                                           :].groupby(['cc_track', 'cc_version', 'p_platform']).size() # unclaimed match
+
+    unmatched_count_by_db = unmatched_count_by_db.reindex(all_values_combination, fill_value = 0) # TODO need to refinement 
+    unmatched_count_by_db.name = 'unclaimed matched count'
+    # print(unmatched_count_by_db)
+
+    df_temp = pd.concat([matched_count_by_db, unmatched_count_by_db], axis=1)
+    # print(df_temp)
+    # append dummy rows for each platforms and versions
     for platform in PLATFORMS_DB_IN_SCOPE:
         for version in versions: 
             matched_df = append_row(matched_df, {'cc_track': song_name, 'cc_version': version, 'p_platform': platform, 'p_comments': 0, 'p_likes_count': 0, 'p_streams': 0})
     
     matched_summary = matched_df.groupby(['cc_track', 'cc_version', 'p_platform'])[['p_comments', 'p_likes_count', 'p_streams']].agg(customized_summary)
+
+    # add the matched count and unmatched count series)
+    # print(matched_summary)
+    matched_summary = pd.concat([matched_summary, df_temp], axis=1) 
     logging.debug(str(matched_summary))
     # matched_summary = matched_summary.rename(columns={'p_comments': 'comments', 'p_likes_count': 'likes'})
     # matched_summary.drop(columns=['streams_v1', 'streams_v2'], inplace=True)
     matched_summary = matched_summary.unstack()
-    matched_summary['matched count'] = matched_df.groupby(['cc_track', 'cc_version']).size()
+    logging.info('---the shape of match_df is: {}'.format(matched_df.shape))
+    matched_summary['matched count'] = matched_count_series
+    logging.info("---the mathed_summary[matched count] is: {} ".format(list(matched_summary['matched count'])))
 
     matched_summary.columns = [' '.join(reversed(col)).strip('_') for col in matched_summary.columns.values]
     matched_summary.reset_index(inplace=True)

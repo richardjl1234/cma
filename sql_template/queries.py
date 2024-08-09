@@ -21,8 +21,8 @@ award.play_num as p_stream_count_1,
 top_songs.play_count as p_stream_count_2
 FROM audit_songs
 INNER JOIN audit_albums on audit_songs.album_id = audit_albums.album_id
-INNER JOIN honor_single_award as award on award.song_id = audit_songs.song_id
-INNER JOIN honor_top_songs as top_songs on audit_songs.song_id::text = top_songs.song_id
+left outer JOIN honor_single_award as award on award.song_id = audit_songs.song_id
+left outer JOIN honor_top_songs as top_songs on audit_songs.song_id::text = top_songs.song_id
 where audit_songs.song_name ilike '%{song_name}%'
 """, 
 # where '102714' = any(audit_songs.artist_array)
