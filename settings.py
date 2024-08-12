@@ -5,7 +5,7 @@ import logging
 from collections import namedtuple
 
 # LOG_LEVEL=logging.INFO
-LOG_LEVEL=logging.INFO
+LOG_LEVEL=logging.DEBUG
 
 # output format for summary and detail
 
@@ -19,10 +19,18 @@ VERSION_ALIAS = {
 }
 
 # The platform names from client statements (in lower case)
-PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['netease', 'tencent']
+PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['NetEase', 'Tencent']
 
 # The platform database names to be included
 PLATFORMS_DB_IN_SCOPE = ('netease_max', 'kugou', 'qqmusicv2')
+
+# map the platform db name to actual platform name (which will be shown in the final report)
+PLATFORM_NAME_MAPPING_DICT = {
+    'netease_max': 'NetEase Cloud Music', 
+    'qqmusicv2': 'QQ Music', 
+    'kugou': 'Kugou Music', 
+    'netease': 'NetEase Cloud Music'
+}
 
 # The following provide mapping between platform db and the platform name in the client statement
 TENCENT_COVERAGE = ['kugou', 'qqmusicv2']
@@ -34,27 +42,6 @@ PLATFORM_MAPPING = {
     'tencent': 'tencent' # handle tencent c_revenue
 }
 
-# The column mapping from intermediate result to final
-FINAL_COLUMN_MAPPING = {
-    "Artist Name": ("Catalog Metadata", "Artist Name"), 
-    "Track Name": ("Catalog Metadata", "Track Name"), 
-    "Unclaimed Matches": ("Catalog Overview", "Unclaimed Matches"),
-    "Claimed Matches": ("Catalog Overview", "Claimed Matches"), 
-    "Total Revenue": ("Catalog Overview", "Total Revenue"), 
-    "Total Stream": ("Catalog Overview", "Total Stream"), 
-    "Estimated Revenue": ("Catalog Overview", "Estimated Revenue"), 
-    "Estimated Stream": ("Catalog Overview", "Estimated Stream"), 
-    "Total Comments": ("Catalog Overview", "Total Comments"), 
-    "Total Favorites": ("Catalog Overview", "Total Favorites"), 
-    "Total Matches": ("NetEase Cloud Music", "Total Matches"), 
-    "Claimed Matches": ("NetEase Cloud Music", "Claimed Matches"), 
-    "Unclaimed Matches": ("NetEase Cloud Music", "Unclaimed Matches"), 
-    "Revenue": ("NetEase Cloud Music", "Revenue"), 
-    "Comments (Claimed)": ("NetEase Cloud Music", "Comments (Claimed)"), 
-    "Favorites (Claimed)": ("NetEase Cloud Music", "Favorites (Claimed)"), 
-    "Comments (Unclaimed)": ("NetEase Cloud Music", "Comments (Unclaimed)"), 
-    "Favorites (Unclaimed)": ("NetEase Cloud Music", "Favorites (Unclaimed)"), 
-}
 
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
@@ -63,12 +50,12 @@ OUTPUT_PATH = Path('output') # specify the folder where the output files to be s
 INPUT_PATH = "input_data"
  
 # INPUT_FILE = "cc_soave.pkl"  
-# INPUT_FILE = "Two Steps Test.xlsx"  
+INPUT_FILE = "Two Steps Test.xlsx"  
 # INPUT_FILE = "cc_soave.xlsx"  
-INPUT_FILE = "cc_twosteps.pkl"  
+# INPUT_FILE = "cc_twosteps.pkl"  
 
 # This is useful when we need to resume the process from the previous aborted process 
-START_SONG_INDEX = 2  # specfiy the start song index. This index is INCLUDED
+START_SONG_INDEX =2  # specfiy the start song index. This index is INCLUDED
 END_SONG_INDEX = 2 # specfiy when the process will be stopped
 
 ##############################################################

@@ -5,10 +5,11 @@
 import os, sys
 import pickle
 import logging
+import numpy as np
 from pathlib import Path
 import pandas as pd
-from settings import  OUTPUT_PATH, PLATFORMS_DB_IN_SCOPE, get_conn_params, COLUMN_MAPPING, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, DataFeed, PLATFORM_IN_SCOPE_CLIENT_STATEMENT
-from settings import PLATFORM_MAPPING
+from settings import  OUTPUT_PATH, PLATFORMS_DB_IN_SCOPE, get_conn_params, COLUMN_MAPPING, LOG_LEVEL, DataFeed, PLATFORM_IN_SCOPE_CLIENT_STATEMENT
+from settings import PLATFORM_MAPPING, PLATFORM_NAME_MAPPING_DICT
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
 from modules.rds_access import execute_sql_query_retriable, DatabaseQueryException
 
@@ -21,7 +22,7 @@ from modules.msv7 import preprocess_data, match_tracks_v2,  CLIENT_COLS, PLATFOR
 
 pd.options.mode.chained_assignment = None
 
-SUMMARY_OUTPUT_COLUMNS = [ 'Total Comment', "Total Revenue",'Total Streams',  "cc_track", "cc_version", ]
+SUMMARY_OUTPUT_COLUMNS = ['Total Comments', "Total Revenue", 'Total Streams', "cc_track", "cc_version", ]
 DROP_COLUMNS = ['p_stream_count_1', 'p_stream_count_2', 'c_platform', 'c_revenue', 'match_id', 'p_track', 'c_track' ]
 
 # @timeit
@@ -262,23 +263,25 @@ def process_one_song(song_index, song_name, df_client_song):
         df_summary_client = df_summary_client.merge(matched_summary_df, on=['cc_track','cc_version'], how='left')
 
         # add the total revenue and total comment columns
-        df_summary_client['Total Revenue'] = df_summary_client.apply(
+        df_summary_client[('Catalog Overview', 'Total Revenue')] = df_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'c_revenue' in idx), axis=1)
-        df_summary_client['Total Streams'] = df_summary_client.apply(
+        df_summary_client[('Catalog Overview','Total Streams')] = df_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'c_streams' in idx), axis=1)
-        df_summary_client['Total Comment'] = df_summary_client.apply(
+        df_summary_client[('Catalog Overview','Total Comments')] = df_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'p_comments' in idx), axis=1)
 
+        logging.debug(str(df_summary_client))
+        logging.debug(f"{df_summary_client.columns = }")
         # reorg the column sequence
-        columns = SUMMARY_OUTPUT_COLUMNS + sorted([
-            x for x in df_summary_client.columns if x not in SUMMARY_OUTPUT_COLUMNS]) 
+        # columns = SUMMARY_OUTPUT_COLUMNS + sorted([
+            # x for x in df_summary_client.columns if x not in SUMMARY_OUTPUT_COLUMNS]) 
         
-        df_summary_client = df_summary_client.loc[:, columns]
+        # df_summary_client = df_summary_client.loc[:, columns]
 
         # create the 2 level column name so that the columns of same category can be clustered.
-        columns_new = [(PLATFORM_MAPPING.get(col.split()[0], '')   , col)   for col in columns]
+        # columns_new = [(PLATFORM_MAPPING.get(col.split()[0], '')   , col)   for col in columns]
         # create the multiple level column from the columns_new tuples
-        df_summary_client.columns = pd.MultiIndex.from_tuples(columns_new)
+        # df_summary_client.columns = pd.MultiIndex.from_tuples(columns_new)
 
         logging.info("now output the merged summary data to output folder for song {}".format(song_name))
         df_summary_client.to_excel(OUTPUT_PATH / "excel" / "summary_{}.xlsx".format('_'.join(song_name.split())))
@@ -301,8 +304,7 @@ def process_one_song(song_index, song_name, df_client_song):
 
 def customized_summary(series):
     if any([x== 'NA' for x in series.values]):
-        return 'NA'
-        
+        return np.nan
     else: 
         return series.sum()
 
@@ -319,46 +321,96 @@ def get_summary_from_platform_matched_df(temp_df):
     versions = matched_df['cc_version'].unique()
     # get the matched count series
     matched_count_series = matched_df.groupby(['cc_track', 'cc_version']).size()
-    all_values_combination = matched_df.set_index(['cc_track', 'cc_version', 'p_platform']).index.unique()
-    # print(f"{all_values_combination =}")
+
+    # get the distinct value of cc_track and cc_version values and then add the platform value, which will be the baseline of the index of the final df
+    # the index should be cc_track, cc_version, p_platform
+    all_values_combination = [(*x ,platform)
+        for x in matched_df.set_index(['cc_track', 'cc_version']).index.unique()
+        for platform in PLATFORMS_DB_IN_SCOPE 
+        ]
+
+    logging.info(f"{all_values_combination =}")
 
     # print(matched_df.columns)
-    # now get the matched and unmatched count 
+    # CLAIMED MATCHES
     matched_count_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'], 
                                          :].groupby(['cc_track', 'cc_version', 'p_platform']).size() # claimed match
     matched_count_by_db = matched_count_by_db.reindex(all_values_combination, fill_value = 0) ## TODO need to refinement
-    matched_count_by_db.name = 'claimed matched count'
+    matched_count_by_db.name = 'Claimed Matches'
     # print(matched_count_by_db)
 
+    # UNCLAIMED MATCHES
     unmatched_count_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'], 
                                            :].groupby(['cc_track', 'cc_version', 'p_platform']).size() # unclaimed match
 
     unmatched_count_by_db = unmatched_count_by_db.reindex(all_values_combination, fill_value = 0) # TODO need to refinement 
-    unmatched_count_by_db.name = 'unclaimed matched count'
+    unmatched_count_by_db.name = 'Unclaimed Matches'
     # print(unmatched_count_by_db)
 
-    df_temp = pd.concat([matched_count_by_db, unmatched_count_by_db], axis=1)
+    # CLAIMED COMMENTS
+    claimed_comments_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
+                                           :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_comments'].agg(customized_summary)
+                                           # claimed comments
+    claimed_comments_by_db = claimed_comments_by_db.reindex(all_values_combination, fill_value = 0) 
+    claimed_comments_by_db.name = 'Comments (Claimed)' 
+
+    # UNCLAUMED COMMENTS
+    unclaimed_comments_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'],
+                                           :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_comments'].agg(customized_summary)
+                                           # unclaimed comments
+    unclaimed_comments_by_db = unclaimed_comments_by_db.reindex(all_values_combination, fill_value = 0)
+    unclaimed_comments_by_db.name = 'Comments (Unclaimed)'
+
+    # CLAIMED LIKES 
+    claimed_likes_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
+                                           :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_likes_count'].agg(customized_summary)
+                                           # claimed likes
+    claimed_likes_by_db = claimed_likes_by_db.reindex(all_values_combination, fill_value = 0)
+    claimed_likes_by_db.name = 'Likes (Claimed)' 
+
+    # UNCLAIMED LIKES 
+    unclaimed_likes_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'],
+                                           :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_likes_count'].agg(customized_summary)
+                                           # unclaimed likes
+    unclaimed_likes_by_db = unclaimed_likes_by_db.reindex(all_values_combination, fill_value = 0)
+    unclaimed_likes_by_db.name = 'Likes (Unclaimed)'
+
+    # CLAIMED STREAMS
+    claimed_streams_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
+                                           :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_streams'].agg(customized_summary)
+                                           # claimed streams
+    claimed_streams_by_db = claimed_streams_by_db.reindex(all_values_combination, fill_value = 0)
+    claimed_streams_by_db.name = 'Streams (Claimed)'
+
+    # UNCLAIMED STREAMS
+    unclaimed_streams_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'],
+                                           :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_streams'].agg(customized_summary)
+                                           # unclaimed streams
+    unclaimed_streams_by_db = unclaimed_streams_by_db.reindex(all_values_combination, fill_value = 0)
+    unclaimed_streams_by_db.name = 'Streams (Unclaimed)'
+
+    matched_summary = pd.concat([matched_count_by_db, unmatched_count_by_db, 
+                                 claimed_comments_by_db, unclaimed_comments_by_db,
+                                 claimed_likes_by_db, unclaimed_likes_by_db,
+                                 claimed_streams_by_db, unclaimed_streams_by_db], axis=1)
     # print(df_temp)
     # append dummy rows for each platforms and versions
-    for platform in PLATFORMS_DB_IN_SCOPE:
-        for version in versions: 
-            matched_df = append_row(matched_df, {'cc_track': song_name, 'cc_version': version, 'p_platform': platform, 'p_comments': 0, 'p_likes_count': 0, 'p_streams': 0})
     
-    matched_summary = matched_df.groupby(['cc_track', 'cc_version', 'p_platform'])[['p_comments', 'p_likes_count', 'p_streams']].agg(customized_summary)
+    # matched_summary = matched_df.groupby(['cc_track', 'cc_version', 'p_platform'])[['p_comments', 'p_likes_count', 'p_streams']].agg(customized_summary)
 
     # add the matched count and unmatched count series)
     # print(matched_summary)
-    matched_summary = pd.concat([matched_summary, df_temp], axis=1) 
-    logging.debug(str(matched_summary))
+    # matched_summary = pd.concat([matched_summary, df_temp], axis=1) 
     # matched_summary = matched_summary.rename(columns={'p_comments': 'comments', 'p_likes_count': 'likes'})
     # matched_summary.drop(columns=['streams_v1', 'streams_v2'], inplace=True)
     matched_summary = matched_summary.unstack()
     logging.info('---the shape of match_df is: {}'.format(matched_df.shape))
-    matched_summary['matched count'] = matched_count_series
-    logging.info("---the mathed_summary[matched count] is: {} ".format(list(matched_summary['matched count'])))
+    matched_summary.columns = [(PLATFORM_NAME_MAPPING_DICT.get(col[1], col[1]), col[0]) for col in matched_summary.columns.values] # swap the level of the column name
 
-    matched_summary.columns = [' '.join(reversed(col)).strip('_') for col in matched_summary.columns.values]
+    matched_summary[('Catalog Overview', 'Total Matches Detected')] = matched_count_series
+    logging.info("---the mathed_summary[matched count] is: {} ".format(list(matched_summary[('Catalog Overview', 'Total Matches Detected')])))
     matched_summary.reset_index(inplace=True)
+    logging.debug(str(matched_summary))
     return matched_summary
     
 
@@ -370,47 +422,40 @@ def append_row(df, row):
            ).reset_index(drop=True)
 
 def get_summary_data_from_client_df(df_client_song_input):
-    # TODO this can be changed when the requirements are changed
-    # summary_by = ['Unique Song ID', 'Unique Version ID', 'c_platform']
-    # summary_by = ['cc_track', 'cc_version', 'c_album']
+    # get the summary data  from client statement
     df_client_song = df_client_song_input.copy()
-    summary_by = ['cc_track', 'cc_version']
-    values_tobe_summed = ['c_revenue']
-    logging.debug("The list of versions are {}".format(df_client_song['cc_version'].unique()))
 
-    # get the unique value for cc_version column in df_client_song
-    versions = df_client_song['cc_version'].unique()
+    df_client_song['c_platform'] = df_client_song['c_platform'].str.strip()
+    filter_platform = df_client_song['c_platform'].apply(lambda x: x in PLATFORM_IN_SCOPE_CLIENT_STATEMENT)
+    df_client_song = df_client_song.loc[filter_platform, :]
 
-    song_name = list(df_client_song['cc_track'])[0]
-    logging.info("There are {} versions for song {}".format(versions, song_name))
+    all_values_combination = [(*x ,platform)
+            for x in df_client_song.set_index(['cc_track', 'cc_version']).index.unique()
+            for platform in PLATFORM_IN_SCOPE_CLIENT_STATEMENT 
+            ]
 
-    df_client_song['c_platform'] = df_client_song['c_platform'].apply(lambda x: x.strip().strip('"').lower())
-    df_client_song = df_client_song.loc[df_client_song['c_platform'].isin(PLATFORM_IN_SCOPE_CLIENT_STATEMENT), :]
-    df_client_song['cc_version'] = df_client_song['cc_version'].fillna('generic')
+    df_songs_summary = df_client_song.groupby(by=['cc_track', 'cc_version', 'c_platform'])[['c_revenue', 'c_streams']].agg(sum)
+    logging.debug(f"{df_songs_summary = }")
+    df_songs_summary = df_songs_summary.reindex(all_values_combination, fill_value=0)
 
+    logging.debug("The shape of the df_songs_summary is {}".format(df_songs_summary.shape)) 
+    logging.debug("The columns of the df_songs_summary is {}".format(df_songs_summary.columns))
 
-    # add a dummy row with zero value for each platform and version
-    for platform in PLATFORM_IN_SCOPE_CLIENT_STATEMENT:
-        for version in versions: 
-            dummy_row = {'cc_track': song_name, 'cc_version':version, 'c_platform': platform, 'c_revenue': 0}
-            df_client_song = append_row(df_client_song, dummy_row)
+    columns_mapping = {
+        'c_revenue': 'Total Revenue',
+        'c_streams': 'Total Streams',
+    }
 
-    df_client_song = df_client_song.loc[:, [*summary_by, 'c_platform', *values_tobe_summed]]
-    #df_client_song.to_excel('temp/client_song_origin.xlsx')
+    # df_songs_summary = df_songs.groupby(by=['cc_track', 'cc_version', 'c_platform'])[['c_revenue', 'c_streams']].agg(sum)
+    df_songs_summary = df_songs_summary.unstack() # move c_platform to column first level index
+    df_songs_summary.columns = [('Catalog Overview', col[1] + ' ' + columns_mapping[col[0]]) 
+                                for col in df_songs_summary.columns.values]
 
-    df_summary = df_client_song.groupby([*summary_by, 'c_platform'])[values_tobe_summed].agg('sum')
-    df_summary = df_summary.pivot_table(index=summary_by, columns='c_platform', values=values_tobe_summed)
-    df_summary.columns = [ ' '.join(reversed(cols)) for cols in df_summary.columns]
-
-    df_summary.reset_index(inplace=True)
-    # df_summary['versions'] = versions
-
-    # now rename the columns name 
-
-    df_summary.to_excel('temp/client_song_summary.xlsx')
-    df_client_song.to_excel('temp/client_song.xlsx')
-
-    return df_summary
+    # now get the dictionay for logging.info("The shape of the df_songs_summary is {}".format(df_songs_summary.shape)) artist name and track title
+    # df_client_song.set_index(['cc_track', 'cc_version'], inplace=True)
+    df_songs_summary.reset_index(inplace=True)
+    df_songs_summary.to_excel('temp/client_song_summary.xlsx')
+    return df_songs_summary
 
 if __name__ == "__main__":
 
