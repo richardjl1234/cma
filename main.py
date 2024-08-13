@@ -2,7 +2,7 @@ import os, sys
 import pickle
 import logging
 from settings import LOG_PATH, OUTPUT_PATH, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, INPUT_FILE, INPUT_PATH, ARTIST_ALIAS
-from settings import TENCENT_COVERAGE,  PLATFORM_IN_SCOPE_CLIENT_STATEMENT
+from settings import TENCENT_COVERAGE,  PLATFORM_IN_SCOPE_CLIENT_STATEMENT, PLATFORM_NAME_MAPPING_DICT
 from one_song_process import process_one_song
 from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
@@ -201,8 +201,8 @@ def main():
     dfs_client_platform_merged.reset_index(drop=True, inplace=True)
     dfs_client_platform_merged.columns = pd.MultiIndex.from_tuples(dfs_client_platform_merged.columns)
     dfs_client_platform_merged.sort_index(level=[0, 1], axis=1, inplace=True)
-    for cols in dfs_client_platform_merged.columns:
-        print(cols)
+    # for cols in dfs_client_platform_merged.columns:
+    #     print(cols)
 
     dfs_client_platform_merged = reorg_final_result(dfs_client_platform_merged)
 
@@ -236,20 +236,23 @@ def reorg_final_result(df):
     df[('Catalog Overview', 'Estimated Streams')] = ''
     df[('Catalog Overview', 'Total Favorites')] = ''
 
-    df[('NetEase Cloud Music', 'Total Matches')] = df[('NetEase Cloud Music', 'Claimed Matches')] + df[('NetEase Cloud Music', 'Unclaimed Matches')]
-    df[('NetEase Cloud Music', 'Favorites (Claimed)')] =  ''
-    df[('NetEase Cloud Music', 'Favorites (Unclaimed)')] =  ''
-    df[('NetEase Cloud Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
+    if 'NetEase Cloud Music' in PLATFORM_NAME_MAPPING_DICT.values():  
+        df[('NetEase Cloud Music', 'Total Matches')] = df[('NetEase Cloud Music', 'Claimed Matches')] + df[('NetEase Cloud Music', 'Unclaimed Matches')]
+        df[('NetEase Cloud Music', 'Favorites (Claimed)')] =  ''
+        df[('NetEase Cloud Music', 'Favorites (Unclaimed)')] =  ''
+        df[('NetEase Cloud Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
 
-    df[('Kugou Music', 'Total Matches')] = df[('Kugou Music', 'Claimed Matches')] + df[('Kugou Music', 'Unclaimed Matches')]
-    df[('Kugou Music', 'Favorites (Claimed)')] =  ''
-    df[('Kugou Music', 'Favorites (Unclaimed)')] =  ''
+    if 'Kugou Music' in PLATFORM_NAME_MAPPING_DICT.values():  
+        df[('Kugou Music', 'Total Matches')] = df[('Kugou Music', 'Claimed Matches')] + df[('Kugou Music', 'Unclaimed Matches')]
+        df[('Kugou Music', 'Favorites (Claimed)')] =  ''
+        df[('Kugou Music', 'Favorites (Unclaimed)')] =  ''
     # df[('Kugou Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
 
-    df[('QQ Music', 'Total Matches')] = df[('QQ Music', 'Claimed Matches')] + df[('QQ Music', 'Unclaimed Matches')]
-    df[('QQ Music', 'Favorites (Claimed)')] =  ''
-    df[('QQ Music', 'Favorites (Unclaimed)')] =  ''
-    # df[('QQ Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
+    if 'QQ Music' in PLATFORM_NAME_MAPPING_DICT.values():  
+        df[('QQ Music', 'Total Matches')] = df[('QQ Music', 'Claimed Matches')] + df[('QQ Music', 'Unclaimed Matches')]
+        df[('QQ Music', 'Favorites (Claimed)')] =  ''
+        df[('QQ Music', 'Favorites (Unclaimed)')] =  ''
+        # df[('QQ Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
     columns = [
         ('Catalog Metadata', 'Artist Name'), 
         ('Catalog Metadata', 'Track Title'),
@@ -264,7 +267,10 @@ def reorg_final_result(df):
         ('Catalog Overview', 'Total Comments'), 
         ('Catalog Overview', 'Total Favorites'), 
         ('Catalog Overview', 'Tencent Total Revenue'),
+    ]
 
+    if 'NetEase Cloud Music' in PLATFORM_NAME_MAPPING_DICT.values():  
+        columns += [
         ('NetEase Cloud Music', 'Total Matches'), 
         ('NetEase Cloud Music', 'Claimed Matches'), 
         ('NetEase Cloud Music', 'Unclaimed Matches'), 
@@ -273,43 +279,52 @@ def reorg_final_result(df):
         ('NetEase Cloud Music', 'Favorites (Claimed)'), 
         ('NetEase Cloud Music', 'Comments (Unclaimed)'), 
         ('NetEase Cloud Music', 'Favorites (Unclaimed)'), 
+        ]
         # ('NetEase Cloud Music', 'Likes (Claimed)'), 
         # ('NetEase Cloud Music', 'Likes (Unclaimed)'), 
         # ('NetEase Cloud Music', 'Streams (Claimed)'), 
         # ('NetEase Cloud Music', 'Streams (Unclaimed)'), 
-        ('Kugou Music', 'Total Matches'), 
-        ('Kugou Music', 'Claimed Matches'), 
-        ('Kugou Music', 'Unclaimed Matches'), 
-        # ('Kugou Music', 'Revenue'),
-        ('Kugou Music', 'Comments (Claimed)'), 
-        ('Kugou Music', 'Favorites (Claimed)'), 
-        ('Kugou Music', 'Comments (Unclaimed)'), 
-        ('Kugou Music', 'Favorites (Unclaimed)'), 
-        # ('Kugou Music', 'Claimed Matches'), 
-        # ('Kugou Music', 'Comments (Claimed)'), 
-        # ('Kugou Music', 'Comments (Unclaimed)'), 
-        # ('Kugou Music', 'Likes (Claimed)'), 
-        # ('Kugou Music', 'Likes (Unclaimed)'), 
-        # ('Kugou Music', 'Streams (Claimed)'), 
-        # ('Kugou Music', 'Streams (Unclaimed)'), 
-        # ('Kugou Music', 'Unclaimed Matches'), 
-        ('QQ Music', 'Total Matches'), 
-        ('QQ Music', 'Claimed Matches'), 
-        ('QQ Music', 'Unclaimed Matches'), 
-        # ('QQ Music', 'Revenue'),
-        ('QQ Music', 'Comments (Claimed)'), 
-        ('QQ Music', 'Favorites (Claimed)'), 
-        ('QQ Music', 'Comments (Unclaimed)'), 
-        ('QQ Music', 'Favorites (Unclaimed)'), 
-        # ('QQ Music', 'Claimed Matches'), 
-        # ('QQ Music', 'Comments (Claimed)'), 
-        # ('QQ Music', 'Comments (Unclaimed)'), 
-        # ('QQ Music', 'Likes (Claimed)'), 
-        # ('QQ Music', 'Likes (Unclaimed)'), 
-        # ('QQ Music', 'Streams (Claimed)'), 
-        # ('QQ Music', 'Streams (Unclaimed)'), 
-        # ('QQ Music', 'Unclaimed Matches'), 
-    ]
+
+    if 'Kugou Music' in PLATFORM_NAME_MAPPING_DICT.values():  
+        columns += [
+            ('Kugou Music', 'Total Matches'), 
+            ('Kugou Music', 'Claimed Matches'), 
+            ('Kugou Music', 'Unclaimed Matches'), 
+            # ('Kugou Music', 'Revenue'),
+            ('Kugou Music', 'Comments (Claimed)'), 
+            ('Kugou Music', 'Favorites (Claimed)'), 
+            ('Kugou Music', 'Comments (Unclaimed)'), 
+            ('Kugou Music', 'Favorites (Unclaimed)'), 
+            # ('Kugou Music', 'Claimed Matches'), 
+            # ('Kugou Music', 'Comments (Claimed)'), 
+            # ('Kugou Music', 'Comments (Unclaimed)'), 
+            # ('Kugou Music', 'Likes (Claimed)'), 
+            # ('Kugou Music', 'Likes (Unclaimed)'), 
+            # ('Kugou Music', 'Streams (Claimed)'), 
+            # ('Kugou Music', 'Streams (Unclaimed)'), 
+            # ('Kugou Music', 'Unclaimed Matches'), 
+        ]
+
+    if 'QQ Music' in PLATFORM_NAME_MAPPING_DICT.values():  
+        columns += [
+            ('QQ Music', 'Total Matches'), 
+            ('QQ Music', 'Claimed Matches'), 
+            ('QQ Music', 'Unclaimed Matches'), 
+            # ('QQ Music', 'Revenue'),
+            ('QQ Music', 'Comments (Claimed)'), 
+            ('QQ Music', 'Favorites (Claimed)'), 
+            ('QQ Music', 'Comments (Unclaimed)'), 
+            ('QQ Music', 'Favorites (Unclaimed)'), 
+            # ('QQ Music', 'Claimed Matches'), 
+            # ('QQ Music', 'Comments (Claimed)'), 
+            # ('QQ Music', 'Comments (Unclaimed)'), 
+            # ('QQ Music', 'Likes (Claimed)'), 
+            # ('QQ Music', 'Likes (Unclaimed)'), 
+            # ('QQ Music', 'Streams (Claimed)'), 
+            # ('QQ Music', 'Streams (Unclaimed)'), 
+            # ('QQ Music', 'Unclaimed Matches'), 
+        ]
+    
     df=df.loc[:,pd.MultiIndex.from_tuples(columns)] 
 
     return df

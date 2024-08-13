@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 from settings import  OUTPUT_PATH, PLATFORMS_DB_IN_SCOPE, get_conn_params, COLUMN_MAPPING, LOG_LEVEL, DataFeed, PLATFORM_IN_SCOPE_CLIENT_STATEMENT
-from settings import PLATFORM_MAPPING, PLATFORM_NAME_MAPPING_DICT
+from settings import  PLATFORM_NAME_MAPPING_DICT
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
 from modules.rds_access import execute_sql_query_retriable, DatabaseQueryException
 
@@ -456,7 +456,7 @@ def get_summary_data_from_client_df(df_client_song_input):
     # now get the dictionay for logging.info("The shape of the df_songs_summary is {}".format(df_songs_summary.shape)) artist name and track title
     # df_client_song.set_index(['cc_track', 'cc_version'], inplace=True)
     df_songs_summary.reset_index(inplace=True)
-    df_songs_summary.to_excel('temp/client_song_summary.xlsx')
+    # df_songs_summary.to_excel('temp/client_song_summary.xlsx')
     return df_songs_summary
 
 if __name__ == "__main__":
