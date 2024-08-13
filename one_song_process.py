@@ -259,18 +259,20 @@ def process_one_song(song_index, song_name, df_client_song):
         matched_summary_df = get_summary_from_platform_matched_df(matched_df)
 
         # now merge the match_summary_df with the summary data from the client statements
-        logging.debug(str(df_summary_client))
+        logging.debug(str(df_summary_client.T))
+        logging.debug(f"{df_summary_client.columns = }")
         df_summary_client = df_summary_client.merge(matched_summary_df, on=['cc_track','cc_version'], how='left')
 
+        logging.debug(f"{df_summary_client.columns = }")
+        logging.debug(str(df_summary_client.T))
         # add the total revenue and total comment columns
         df_summary_client[('Catalog Overview', 'Total Revenue')] = df_summary_client.apply(
-            lambda row: sum(row[idx] for idx in row.index if 'c_revenue' in idx), axis=1)
+            lambda row: sum(row[idx] for idx in row.index if 'Total Revenue' in idx[1]), axis=1)
         df_summary_client[('Catalog Overview','Total Streams')] = df_summary_client.apply(
-            lambda row: sum(row[idx] for idx in row.index if 'c_streams' in idx), axis=1)
+            lambda row: sum(row[idx] for idx in row.index if 'Total Streams' in idx[1]), axis=1)
         df_summary_client[('Catalog Overview','Total Comments')] = df_summary_client.apply(
-            lambda row: sum(row[idx] for idx in row.index if 'p_comments' in idx), axis=1)
+            lambda row: sum(row[idx] for idx in row.index if 'Comments' in idx[1]), axis=1)
 
-        logging.debug(str(df_summary_client))
         logging.debug(f"{df_summary_client.columns = }")
         # reorg the column sequence
         # columns = SUMMARY_OUTPUT_COLUMNS + sorted([

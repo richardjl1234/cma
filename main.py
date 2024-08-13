@@ -171,13 +171,6 @@ def main():
     logging.info("The final matched df shape is {}, unmatched df shape is {}".format(dfs_matched.shape, dfs_unmatched.shape))
     logging.info("the final summary df shape is {}".format(dfs_summary.shape))
 
-    # save_to_excel_v2_matched(dfs_matched, dfs_unmatched, OUTPUT_PATH / "final_result.xlsx")
-    # output all the result to the final excel file and csv file
-    dfs_matched.reset_index(drop=True).to_excel(OUTPUT_PATH / "matched_result_details.xlsx", index=True)
-    dfs_unmatched.reset_index(drop=True).to_csv(OUTPUT_PATH/ "unmatched_result.csv", index=False)
-    logging.debug(dfs_summary.columns)
-    # logging.debug(f"{dfs_summary.index = }")
-
     ## TODO to fix the issues 
     # special logic to calculate the total comment for those tencent related platform
     # dfs_summary[('tencent', 'tencent total comments')] = dfs_summary.apply(
@@ -208,8 +201,25 @@ def main():
     dfs_client_platform_merged.reset_index(drop=True, inplace=True)
     dfs_client_platform_merged.columns = pd.MultiIndex.from_tuples(dfs_client_platform_merged.columns)
     dfs_client_platform_merged.sort_index(level=[0, 1], axis=1, inplace=True)
+    for cols in dfs_client_platform_merged.columns:
+        print(cols)
 
-    dfs_client_platform_merged.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
+    dfs_client_platform_merged = reorg_final_result(dfs_client_platform_merged)
+
+    # dfs_client_platform_merged.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
+
+    logging.info("💾 Saving matched summary and detail results to Excel...")
+    final_result_name = OUTPUT_PATH / "matched_result_final.xlsx"
+    with pd.ExcelWriter(final_result_name, engine='openpyxl') as writer:
+       # Save matched data to 'Matched' sheet
+       dfs_client_platform_merged.to_excel(writer, sheet_name='Catalogue overview', index=True)
+      
+       # Save detailed data to 'Matched' sheet starting from row after matched data
+       dfs_matched = dfs_matched.reset_index(drop=True)
+       dfs_matched.to_excel(writer, sheet_name='All Matches', index=True)
+    
+    logging.info("📊 Matched summary and details are saved to Excel file {}. ".format(str(final_result_name)) )
+    dfs_unmatched.reset_index(drop=True).to_csv(OUTPUT_PATH/ "unmatched_result.csv", index=True)
     # the save the matched result and unmatched result to csv files
     # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")
     # dfs_unmatched.to_csv(OUTPUT_PATH / "unmatched_result.csv")
@@ -220,6 +230,89 @@ def main():
         if len(time_list) == 0: continue
         logging.info("The function {} took {}s in average".format(func_name, sum(time_list)/len(time_list)))
 
+def reorg_final_result(df):
+    logging.info("reorg the final summary result....")
+    df[('Catalog Overview', 'Estimated Revenue')] = ''
+    df[('Catalog Overview', 'Estimated Streams')] = ''
+    df[('Catalog Overview', 'Total Favorites')] = ''
+
+    df[('NetEase Cloud Music', 'Total Matches')] = df[('NetEase Cloud Music', 'Claimed Matches')] + df[('NetEase Cloud Music', 'Unclaimed Matches')]
+    df[('NetEase Cloud Music', 'Favorites (Claimed)')] =  ''
+    df[('NetEase Cloud Music', 'Favorites (Unclaimed)')] =  ''
+    df[('NetEase Cloud Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
+
+    df[('Kugou Music', 'Total Matches')] = df[('Kugou Music', 'Claimed Matches')] + df[('Kugou Music', 'Unclaimed Matches')]
+    df[('Kugou Music', 'Favorites (Claimed)')] =  ''
+    df[('Kugou Music', 'Favorites (Unclaimed)')] =  ''
+    # df[('Kugou Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
+
+    df[('QQ Music', 'Total Matches')] = df[('QQ Music', 'Claimed Matches')] + df[('QQ Music', 'Unclaimed Matches')]
+    df[('QQ Music', 'Favorites (Claimed)')] =  ''
+    df[('QQ Music', 'Favorites (Unclaimed)')] =  ''
+    # df[('QQ Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
+    columns = [
+        ('Catalog Metadata', 'Artist Name'), 
+        ('Catalog Metadata', 'Track Title'),
+        ('Catalog Overview', 'Total Matches Detected'), 
+        ('Catalog Overview', 'Total Revenue'), 
+        ('Catalog Overview', 'Total Streams'), 
+        ('Catalog Overview', 'Estimated Revenue'), 
+        ('Catalog Overview', 'Estimated Streams'), 
+        # ('Catalog Overview', 'NetEase Total Revenue'), 
+        # ('Catalog Overview', 'NetEase Total Streams'), 
+        # ('Catalog Overview', 'Tencent Total Streams'), 
+        ('Catalog Overview', 'Total Comments'), 
+        ('Catalog Overview', 'Total Favorites'), 
+        ('Catalog Overview', 'Tencent Total Revenue'),
+
+        ('NetEase Cloud Music', 'Total Matches'), 
+        ('NetEase Cloud Music', 'Claimed Matches'), 
+        ('NetEase Cloud Music', 'Unclaimed Matches'), 
+        ('NetEase Cloud Music', 'Revenue'),
+        ('NetEase Cloud Music', 'Comments (Claimed)'), 
+        ('NetEase Cloud Music', 'Favorites (Claimed)'), 
+        ('NetEase Cloud Music', 'Comments (Unclaimed)'), 
+        ('NetEase Cloud Music', 'Favorites (Unclaimed)'), 
+        # ('NetEase Cloud Music', 'Likes (Claimed)'), 
+        # ('NetEase Cloud Music', 'Likes (Unclaimed)'), 
+        # ('NetEase Cloud Music', 'Streams (Claimed)'), 
+        # ('NetEase Cloud Music', 'Streams (Unclaimed)'), 
+        ('Kugou Music', 'Total Matches'), 
+        ('Kugou Music', 'Claimed Matches'), 
+        ('Kugou Music', 'Unclaimed Matches'), 
+        # ('Kugou Music', 'Revenue'),
+        ('Kugou Music', 'Comments (Claimed)'), 
+        ('Kugou Music', 'Favorites (Claimed)'), 
+        ('Kugou Music', 'Comments (Unclaimed)'), 
+        ('Kugou Music', 'Favorites (Unclaimed)'), 
+        # ('Kugou Music', 'Claimed Matches'), 
+        # ('Kugou Music', 'Comments (Claimed)'), 
+        # ('Kugou Music', 'Comments (Unclaimed)'), 
+        # ('Kugou Music', 'Likes (Claimed)'), 
+        # ('Kugou Music', 'Likes (Unclaimed)'), 
+        # ('Kugou Music', 'Streams (Claimed)'), 
+        # ('Kugou Music', 'Streams (Unclaimed)'), 
+        # ('Kugou Music', 'Unclaimed Matches'), 
+        ('QQ Music', 'Total Matches'), 
+        ('QQ Music', 'Claimed Matches'), 
+        ('QQ Music', 'Unclaimed Matches'), 
+        # ('QQ Music', 'Revenue'),
+        ('QQ Music', 'Comments (Claimed)'), 
+        ('QQ Music', 'Favorites (Claimed)'), 
+        ('QQ Music', 'Comments (Unclaimed)'), 
+        ('QQ Music', 'Favorites (Unclaimed)'), 
+        # ('QQ Music', 'Claimed Matches'), 
+        # ('QQ Music', 'Comments (Claimed)'), 
+        # ('QQ Music', 'Comments (Unclaimed)'), 
+        # ('QQ Music', 'Likes (Claimed)'), 
+        # ('QQ Music', 'Likes (Unclaimed)'), 
+        # ('QQ Music', 'Streams (Claimed)'), 
+        # ('QQ Music', 'Streams (Unclaimed)'), 
+        # ('QQ Music', 'Unclaimed Matches'), 
+    ]
+    df=df.loc[:,pd.MultiIndex.from_tuples(columns)] 
+
+    return df
 
 if __name__ == "__main__":
     main()  
