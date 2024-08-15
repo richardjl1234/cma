@@ -13,11 +13,11 @@ from modules.common import timeit
 CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 
                'Unique Song ID', 'Unique Version ID', 
                'c_album', 'c_platform',
-               'c_revenue']
+               'c_revenue', 'c_track', 'c_artist', 'c_revenue']
 PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 
                  'pc_artist', 'pc_version', 'refine_process_comment', 
                  'refine_similarity', 'p_platform', 'p_album', 
-                 'p_comments', 
+                 'p_comments', 'p_company', 'p_release_date',
                  'p_likes_count', 'p_stream_count_1', 'p_stream_count_2'] 
 
 

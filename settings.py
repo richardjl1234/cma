@@ -18,29 +18,27 @@ VERSION_ALIAS = {
     'inst':'instrumental'
 }
 
-# The platform names from client statements (in lower case)
-PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['NetEase', 'Tencent']
+# PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['NetEase', 'Tencent']
+PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['NetEase', 'Tencent', 'QQ Music', 'Kugou Music']
+# PLATFORM_IN_SCOPE_CLIENT_STATEMENT = ['NetEase', 'Tencent',  'Kugou Music']
 
 # The platform database names to be included
-PLATFORMS_DB_IN_SCOPE = (
-    'netease_max', 
-    'kugou', 
-    'qqmusicv2',
-    )
+# it also provide the mapping between platform db name and the c_platform 
+PLATFORMS_DB_IN_SCOPE = {
+    'netease_max': "NetEase", 
+    'kugou': "Tencent", 
+    'qqmusicv2': "Tencent",
+    }
 
 # map the platform db name to actual platform name (which will be shown in the final report)
+# Translate the platform db name to a user friendly name which will be shown in the final report
 PLATFORM_NAME_MAPPING_DICT = {
+    'netease': 'NetEase Cloud Music',   # this must be in the first one
     'netease_max': 'NetEase Cloud Music', 
     'qqmusicv2': 'QQ Music', 
     'kugou': 'Kugou Music', 
-    'netease': 'NetEase Cloud Music'
 }
 
-# The following provide mapping between platform db and the platform name in the client statement
-TENCENT_COVERAGE = [
-    'kugou', 
-    'qqmusicv2', 
-    ]
 # PLATFORM_MAPPING = {
 #     'netease_max': 'netease',  # provide platform db mapped to platform name in client statement
 #     'kugou': 'tencent',  # provide platform db mapped to platform name in client statement
@@ -62,8 +60,8 @@ INPUT_PATH = "input_data"
 INPUT_FILE = "cc_twosteps.pkl"  
 
 # This is useful when we need to resume the process from the previous aborted process 
-START_SONG_INDEX =3  # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 4 # specfiy when the process will be stopped
+START_SONG_INDEX =0  # specfiy the start song index. This index is INCLUDED
+END_SONG_INDEX = 5 # specfiy when the process will be stopped
 
 ##############################################################
 # the column mapping from query result to the pc_columns

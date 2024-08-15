@@ -2,7 +2,7 @@ import os, sys
 import pickle
 import logging
 from settings import LOG_PATH, OUTPUT_PATH, START_SONG_INDEX, END_SONG_INDEX, LOG_LEVEL, INPUT_FILE, INPUT_PATH, ARTIST_ALIAS
-from settings import TENCENT_COVERAGE,  PLATFORM_IN_SCOPE_CLIENT_STATEMENT, PLATFORM_NAME_MAPPING_DICT
+from settings import  PLATFORM_IN_SCOPE_CLIENT_STATEMENT, PLATFORM_NAME_MAPPING_DICT, PLATFORMS_DB_IN_SCOPE
 from one_song_process import process_one_song
 from modules.common import timeit, FUNC_TIME_DICT
 from pathlib import Path
@@ -76,6 +76,56 @@ def get_artist_alias(x):
             return v
     return x
 
+def create_final_details_client_df(df_matched_detail: pd.DataFrame, df_client_summary: pd.DataFrame) -> pd.DataFrame: 
+    logging.debug(f'{df_client_summary.columns =}')
+    df_input = df_matched_detail.merge(df_client_summary, on=['cc_track', 'cc_version'])
+    logging.debug(f'{df_input.columns =}')
+
+    df_output = pd.DataFrame()
+    # df_output[('Catalog Metadata ', '#')] = df_matched_detail.index
+    df_output[('Catalog Metadata ', 'Unique Song ID')] = df_input['Unique Song ID']
+    df_output[('Catalog Metadata ', 'Reference Track')] = df_input['c_track']
+    df_output[('Catalog Metadata ', 'Ref. Artist')] = df_input['c_artist']
+    # platform 
+    df_output[('Catalog Metadata ', 'Platform')] = df_input['p_platform'].map({'netease_max': 'NetEase', 'kugou': "Tencent", 'qqmusicv2': 'Tencent'})
+
+    # TODO how to remove those hardcoding
+    # revenue
+    df_output[('Catalog Metadata ', 'Total Revenue')] = df_input.apply(
+        lambda row: row[('Catalog Overview', '{} Total Revenue'.format(PLATFORMS_DB_IN_SCOPE.get(row['p_platform'])))]
+        if row['p_platform'] in PLATFORMS_DB_IN_SCOPE else 'NA'
+        ,axis=1)
+
+        # TODO how to remove those hardcoding
+        # Streams
+    df_output[('Catalog Metadata ', 'Total Streams')] = df_input.apply(
+        lambda row: row[('Catalog Overview', '{} Total Streams'.format(PLATFORMS_DB_IN_SCOPE.get(row['p_platform'])))]
+        if row['p_platform'] in PLATFORMS_DB_IN_SCOPE else 'NA'
+        ,axis=1)
+
+    df_output[('Matched Data', 'Artist Name')] = df_input['pc_artist'] # ok
+    df_output[('Matched Data', 'Track Title')] = df_input['p_track']
+    df_output[('Matched Data', 'Album Name')] = df_input['p_album'] # ok
+    df_output[('Matched Data', 'Platform')] = df_input['p_platform'] # ok
+    df_output[('Matched Data', 'Release Date')] = df_input['p_release_date']
+    df_output[('Matched Data', 'Licensor (Company)')] = df_input['p_company']
+    df_output[('Matched Data', 'Comments')] = df_input['p_comments'] # ok
+    df_output[('Matched Data', 'Favorites')] = df_input['p_likes_count'] # ok
+    df_output[('Matched Data', 'Estimated Streams')] =  '' 
+    df_output[('Matched Data', 'Link')] = ''
+
+    # claimed or not
+    df_output[('Track Status', 'Claim Status ')] = df_input.apply(
+        lambda row: 
+        'claimed' if row['pc_version'] == row['cc_version']
+        else 'unclaimed'
+        ,axis=1)
+
+    df_output[('Track Status', 'Other')] = ''
+    df_output[('Track Status', 'Notes')] = ''
+    df_output.columns = pd.MultiIndex.from_tuples(df_output.columns)
+
+    return df_output
 
 
 def main():
@@ -149,28 +199,39 @@ def main():
     # now get all the pickle files from output/pickle folder, read them and the merge them into final excel file in output folder
     logging.info(" ###### Final Summarization ######")
 
-    pickle_files_details = list(pickle_path.glob("N*.pkl"))
+    pickle_files_details = list(pickle_path.glob("N*-matched_internal.pkl"))
     logging.info("The number of pickle files is {}".format(len(pickle_files_details)))
 
-    dfs_matched, dfs_unmatched  = pd.DataFrame(), pd.DataFrame() 
+    # matched detail dataframe and unmatched datafarame, retrieve from pickle file
+    dfs_final_details_internal, dfs_unmatched  = pd.DataFrame(), pd.DataFrame() 
     for file in pickle_files_details:
         matched_df, unmatched_df = pickle.load(open(file, 'rb'))
         logging.info("The matched df shape is {}, unmatched df shape is {}, filename is {}".format(matched_df.shape, unmatched_df.shape, file.name))  
-        dfs_matched = pd.concat([dfs_matched, matched_df])
+        dfs_final_details_internal = pd.concat([dfs_final_details_internal, matched_df])
         dfs_unmatched = pd.concat([dfs_unmatched, unmatched_df])
+    logging.info("The final matched df shape is {}, unmatched df shape is {}".format(dfs_final_details_internal.shape, dfs_unmatched.shape))
 
-    pickle_files_summary = list(pickle_path.glob("summary*.pkl"))
-    logging.info("The number of summary pickle files is {}".format(len(pickle_files_summary)))
+    # matched summary dataframe for CLIENT
+    pickle_files_summary = list(pickle_path.glob("summary_client*.pkl"))
+    logging.info("The number of summary (client) pickle files is {}".format(len(pickle_files_summary)))
 
-    dfs_summary = pd.DataFrame()
+    dfs_final_summary_client = pd.DataFrame()
     for file in pickle_files_summary:
         df_summary = pickle.load(open(file, 'rb'))
-        logging.info("The summary df shape is {}".format(df_summary.shape))  
-        dfs_summary = pd.concat([dfs_summary, df_summary])
+        logging.info("The summary (client) df shape is {}".format(df_summary.shape))  
+        dfs_final_summary_client = pd.concat([dfs_final_summary_client, df_summary])
+    logging.info("the final summary (client) df shape is {}".format(dfs_final_summary_client.shape))
 
-    logging.info("The final matched df shape is {}, unmatched df shape is {}".format(dfs_matched.shape, dfs_unmatched.shape))
-    logging.info("the final summary df shape is {}".format(dfs_summary.shape))
+    # matched summary dataframe for INTERNAL Usage
+    # pickle_files_summary_internal = list(pickle_path.glob("summary_internal*.pkl"))
+    # logging.info("The number of summary (internal) pickle files is {}".format(len(pickle_files_summary_internal)))
 
+    # dfs_final_summary_internal = pd.DataFrame()
+    # for file in pickle_files_summary_internal:
+    #     df_summary_internal = pickle.load(open(file, 'rb'))
+    #     logging.info("The summary (internal) df shape is {}".format(df_summary_internal.shape))  
+    #     dfs_final_summary_internal= pd.concat([dfs_final_summary_internal, df_summary_internal])
+    # logging.info("the final summary (internal) df shape is {}".format(dfs_final_summary_internal.shape))
     ## TODO to fix the issues 
     # special logic to calculate the total comment for those tencent related platform
     # dfs_summary[('tencent', 'tencent total comments')] = dfs_summary.apply(
@@ -179,46 +240,60 @@ def main():
     #          axis=1)
 
     # dfs_client_platform_merged = dfs_summary.reset_index(drop=True).sort_index(level=[0,1], axis=1)
-    dfs_client_platform_merged = dfs_summary
+    # dfs_final_summary_client = dfs_final_summary_internal
     # dfs_client_platform_merged.columns = [col[1] for col in dfs_client_platform_merged.columns.values] # only keep the level 1 index
-    logging.info("The columns of final summary dataframe is {}".format(dfs_client_platform_merged.columns))
+    logging.info("The columns of final summary dataframe is {}".format(dfs_final_summary_client.columns))
     # dfs_client_platform_merged.columns = [col.strip() for col in dfs_client_platform_merged.columns]
-    dfs_client_platform_merged[('Catalog Overview', 'Total Matches Detected')] = dfs_client_platform_merged[
+    dfs_final_summary_client[('Catalog Overview', 'Total Matches Detected')] = dfs_final_summary_client[
         ('Catalog Overview', 'Total Matches Detected')].fillna(0).astype(int)
     
     # before dfs_summary_final save to disk, merge the data with the df_songs (the client statement)
     # only get the result for inscope data
 
     df_songs.set_index(['cc_track', 'cc_version'], inplace=True)
-    artist_dict = df_songs['Artist Name'].to_dict()
+    artist_dict = df_songs['c_artist'].to_dict()
+
     track_title_dict = df_songs['Track Title'].to_dict()
+    unique_song_id_dict = df_songs['Unique Song ID'].to_dict()
 
-    dfs_client_platform_merged.set_index(['cc_track', 'cc_version'], inplace=True)
+    dfs_final_summary_client.set_index(['cc_track', 'cc_version'], inplace=True)
     # merget the df_songs_summary and dfs_client_platform_merged into final excel file
-    dfs_client_platform_merged[('Catalog Metadata', 'Artist Name')] = dfs_client_platform_merged.index.map(artist_dict)
-    dfs_client_platform_merged[('Catalog Metadata', 'Track Title')] = dfs_client_platform_merged.index.map(track_title_dict)
+    dfs_final_summary_client[('Catalog Metadata', 'Artist Name')] = dfs_final_summary_client.index.map(artist_dict)
+    dfs_final_summary_client[('Catalog Metadata', 'Track Title')] = dfs_final_summary_client.index.map(track_title_dict)
+    dfs_final_summary_client[('Catalog Metadata', 'Unique Song ID')] = dfs_final_summary_client.index.map(unique_song_id_dict)
 
-    dfs_client_platform_merged.reset_index(drop=True, inplace=True)
-    dfs_client_platform_merged.columns = pd.MultiIndex.from_tuples(dfs_client_platform_merged.columns)
-    dfs_client_platform_merged.sort_index(level=[0, 1], axis=1, inplace=True)
+    # create the dfs_final_summary_internal dataframe from the dfs_final_summary_client dataframe
+    dfs_final_summary_client.reset_index(drop=False, inplace=True, names=['cc_track', 'cc_version'])
+    dfs_final_summary_internal = create_summary_internal_df(dfs_final_summary_client)
+
+    dfs_final_details_internal = dfs_final_details_internal.reset_index(drop=True)
+    dfs_final_details_client = create_final_details_client_df(dfs_final_details_internal, dfs_final_summary_client)
+
+    dfs_final_summary_client.drop(columns=['cc_track', 'cc_version'], inplace=True)
+
+    dfs_final_summary_client.columns = pd.MultiIndex.from_tuples(dfs_final_summary_client.columns)
+    dfs_final_summary_client.sort_index(level=[0, 1], axis=1, inplace=True)
     # for cols in dfs_client_platform_merged.columns:
     #     print(cols)
 
-    dfs_client_platform_merged = reorg_final_result(dfs_client_platform_merged)
+    dfs_final_summary_client = reorg_final_result(dfs_final_summary_client)
 
     # dfs_client_platform_merged.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
 
     logging.info("💾 Saving matched summary and detail results to Excel...")
     final_result_name = OUTPUT_PATH / "matched_result_final.xlsx"
     with pd.ExcelWriter(final_result_name, engine='openpyxl') as writer:
-       # Save matched data to 'Matched' sheet
-       dfs_client_platform_merged.to_excel(writer, sheet_name='Catalogue overview', index=True)
-      
-       # Save detailed data to 'Matched' sheet starting from row after matched data
-       dfs_matched = dfs_matched.reset_index(drop=True)
-       dfs_matched.to_excel(writer, sheet_name='All Matches', index=True)
+       # Save matched data to client summary
+       dfs_final_summary_client.to_excel(writer, sheet_name='Catalogue overview', index=True)
+       dfs_final_details_client.to_excel(writer, sheet_name='All Matches', index=True)
+    
+       # save to detail and summary to internal sheets
+       dfs_final_summary_internal.to_excel(writer, sheet_name='Catalogue overview (internal)', index=True)
+
+       dfs_final_details_internal.to_excel(writer, sheet_name='All Matches (internal)', index=True)
     
     logging.info("📊 Matched summary and details are saved to Excel file {}. ".format(str(final_result_name)) )
+    # save the unmatched data to csv file
     dfs_unmatched.reset_index(drop=True).to_csv(OUTPUT_PATH/ "unmatched_result.csv", index=True)
     # the save the matched result and unmatched result to csv files
     # dfs_matched.to_csv(OUTPUT_PATH / "matched_result.csv")
@@ -230,8 +305,10 @@ def main():
         if len(time_list) == 0: continue
         logging.info("The function {} took {}s in average".format(func_name, sum(time_list)/len(time_list)))
 
-def reorg_final_result(df):
+def reorg_final_result(df: pd.DataFrame):
+
     logging.info("reorg the final summary result....")
+
     df[('Catalog Overview', 'Estimated Revenue')] = ''
     df[('Catalog Overview', 'Estimated Streams')] = ''
     df[('Catalog Overview', 'Total Favorites')] = ''
@@ -246,19 +323,20 @@ def reorg_final_result(df):
         df[('Kugou Music', 'Total Matches')] = df[('Kugou Music', 'Claimed Matches')] + df[('Kugou Music', 'Unclaimed Matches')]
         df[('Kugou Music', 'Favorites (Claimed)')] =  ''
         df[('Kugou Music', 'Favorites (Unclaimed)')] =  ''
-    # df[('Kugou Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
+        df[('Kugou Music', 'Revenue')] =  df[('Catalog Overview', 'Kugou Music Total Revenue')]
 
     if 'QQ Music' in PLATFORM_NAME_MAPPING_DICT.values():  
         df[('QQ Music', 'Total Matches')] = df[('QQ Music', 'Claimed Matches')] + df[('QQ Music', 'Unclaimed Matches')]
         df[('QQ Music', 'Favorites (Claimed)')] =  ''
         df[('QQ Music', 'Favorites (Unclaimed)')] =  ''
-        # df[('QQ Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
+        df[('QQ Music', 'Revenue')] =  df[('Catalog Overview', 'QQ Music Total Revenue')]
     columns = [
+        ('Catalog Metadata', 'Unique Song ID'), 
         ('Catalog Metadata', 'Artist Name'), 
         ('Catalog Metadata', 'Track Title'),
+        ('Catalog Metadata', 'Total Revenue'), 
+        ('Catalog Metadata', 'Total Streams'), 
         ('Catalog Overview', 'Total Matches Detected'), 
-        ('Catalog Overview', 'Total Revenue'), 
-        ('Catalog Overview', 'Total Streams'), 
         ('Catalog Overview', 'Estimated Revenue'), 
         ('Catalog Overview', 'Estimated Streams'), 
         # ('Catalog Overview', 'NetEase Total Revenue'), 
@@ -290,7 +368,7 @@ def reorg_final_result(df):
             ('Kugou Music', 'Total Matches'), 
             ('Kugou Music', 'Claimed Matches'), 
             ('Kugou Music', 'Unclaimed Matches'), 
-            # ('Kugou Music', 'Revenue'),
+            ('Kugou Music', 'Revenue'),
             ('Kugou Music', 'Comments (Claimed)'), 
             ('Kugou Music', 'Favorites (Claimed)'), 
             ('Kugou Music', 'Comments (Unclaimed)'), 
@@ -310,7 +388,7 @@ def reorg_final_result(df):
             ('QQ Music', 'Total Matches'), 
             ('QQ Music', 'Claimed Matches'), 
             ('QQ Music', 'Unclaimed Matches'), 
-            # ('QQ Music', 'Revenue'),
+            ('QQ Music', 'Revenue'),
             ('QQ Music', 'Comments (Claimed)'), 
             ('QQ Music', 'Favorites (Claimed)'), 
             ('QQ Music', 'Comments (Unclaimed)'), 
@@ -328,6 +406,46 @@ def reorg_final_result(df):
     df=df.loc[:,pd.MultiIndex.from_tuples(columns)] 
 
     return df
+
+def create_summary_internal_df(df_summary_client: pd.DataFrame):
+    df_summary_internal = pd.DataFrame() 
+
+    df_summary_internal['Unique Song ID'] = df_summary_client[('Catalog Metadata', 'Unique Song ID')]
+    df_summary_internal['matched count'] = df_summary_client[('Catalog Overview', 'Total Matches Detected')]
+    df_summary_internal['Total Comments'] = df_summary_client[('Catalog Overview', 'Total Comments')]
+    df_summary_internal['Total Revenue'] = df_summary_client[('Catalog Metadata', 'Total Revenue')]
+    df_summary_internal['cc_track'] = df_summary_client['cc_track']
+    df_summary_internal['cc_version'] = df_summary_client['cc_version']
+
+    # change the 'Total Revenue' from the client statement to c_revenue
+    for col in df_summary_client.columns: 
+        if 'Total Revenue' in col[1] and col[0] == 'Catalog Overview': 
+            col_name = col[1].removesuffix(' Total Revenue') + ' c_revenue'
+            df_summary_internal[col_name] = df_summary_client[col]
+
+    # platform reverse mapping
+    platform_reverse_dict = {}
+    for k, v in PLATFORM_NAME_MAPPING_DICT.items(): 
+        platform_reverse_dict[v] = k
+
+    # column name reverse mapping
+    p_column_mapping_dict = {
+        'Comments (Claimed)': 'p_comments (Claimed)',
+        'Comments (Unclaimed)': 'p_comments (Unclaimed)', 
+        'Likes (Claimed)': 'p_likes_count (Claimed)',
+        'Likes (Unclaimed)': 'p_likes_count (Unclaimed)', 
+        'Streams (Claimed)': 'p_streams (Claimed)',
+        'Streams (Unclaimed)': 'p_streams (Unclaimed)', 
+    }
+
+    for k, v  in platform_reverse_dict.items(): 
+        for col in df_summary_client.columns: 
+            if k == col[0] and col[1] in p_column_mapping_dict: 
+                col_name = v + ' ' + p_column_mapping_dict[col[1]]
+                df_summary_internal[col_name] = df_summary_client[col]
+
+    logging.debug(f"{df_summary_internal.columns = }")
+    return df_summary_internal
 
 if __name__ == "__main__":
     main()  

@@ -23,7 +23,7 @@ from modules.msv7 import preprocess_data, match_tracks_v2,  CLIENT_COLS, PLATFOR
 pd.options.mode.chained_assignment = None
 
 SUMMARY_OUTPUT_COLUMNS = ['Total Comments', "Total Revenue", 'Total Streams', "cc_track", "cc_version", ]
-DROP_COLUMNS = ['p_stream_count_1', 'p_stream_count_2', 'c_platform', 'c_revenue', 'match_id', 'p_track', 'c_track' ]
+DROP_COLUMNS = ['p_stream_count_1', 'p_stream_count_2',  'match_id', 'c_revenue', ]
 
 # @timeit
 # def take_snapshot(artist_seq_no,data_feed_seq_no, df_platform_concat_dict):
@@ -144,21 +144,21 @@ def retrieve_clean_refine_platform_song_data(data_feed):
 
 
 @timeit
-def process_one_song(song_index, song_name, df_client_song): 
+def process_one_song(song_index, song_name, df_client_single_song_detail): 
     #######################################################################
     # firstly get the summary data from the input df_client_song
-    df_summary_client = get_summary_data_from_client_df(df_client_song)
+    df_client_single_song_summary = get_summary_data_from_client_df(df_client_single_song_detail)
     logging.info("The summary data is based on the client statements is created for song {}".format(song_name))
 
     df_platform_concat_dict = {p: pd.DataFrame(columns=PLATFORM_COLS)  for p in PLATFORMS_DB_IN_SCOPE}
 
     ############################################################################ 
     # get the albums name and artist names based on the song name 
-    album_names = df_client_song['c_album'].str.lower().drop_duplicates().tolist() 
+    album_names = df_client_single_song_detail['c_album'].str.lower().drop_duplicates().tolist() 
     album_names = tuple(map(lambda x: x.strip(), album_names))
     logging.info("The album names are:\n {}".format('\n '.join(album_names)))
 
-    artist_names = df_client_song['cc_artist'].str.lower().drop_duplicates().tolist() 
+    artist_names = df_client_single_song_detail['cc_artist'].str.lower().drop_duplicates().tolist() 
     # split the artist name by comma, and flatten the list of list
     artist_names = map(lambda x: x.split(','), artist_names)
     artist_names = [item for sublist in artist_names for item in sublist]
@@ -167,7 +167,7 @@ def process_one_song(song_index, song_name, df_client_song):
     logging.info("The artist names are:\n {}".format('\n '.join(artist_names)))
 
     # song versions 
-    song_versions = df_client_song['cc_version'].fillna('generic').str.lower().drop_duplicates().tolist()
+    song_versions = df_client_single_song_detail['cc_version'].fillna('generic').str.lower().drop_duplicates().tolist()
     song_versions = tuple(map(lambda x: x.strip(), song_versions))
     logging.info("The song versions are:\n {}".format('\n '.join(song_versions)))
 
@@ -195,7 +195,7 @@ def process_one_song(song_index, song_name, df_client_song):
 
     
     # filter the columns for dataframe df_client_singer and df_platform, using CLIENT_COLS and PLATFORM_COLS
-    df_client_song = df_client_song.loc[:, CLIENT_COLS]
+    df_client_single_song_detail = df_client_single_song_detail.loc[:, CLIENT_COLS]
 
     for platform in PLATFORMS_DB_IN_SCOPE: 
         if not df_platform_concat_dict[platform].empty:
@@ -208,21 +208,21 @@ def process_one_song(song_index, song_name, df_client_song):
 
     try: 
         df_platform_concat_all = df_platform_concat_all.loc[:,PLATFORM_COLS ]
-        df_client_song, df_platform_concat_all = preprocess_data(df_client_song, df_platform_concat_all ) 
+        df_client_single_song_detail, df_platform_concat_all = preprocess_data(df_client_single_song_detail, df_platform_concat_all ) 
     except Exception as e:
         logging.error("Failed to process '{}'".format(song_name))
         print(df_platform_concat_all.head())
 
     ## when log_level is debug, then output the file to debug folder 
     df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format('_'.join(song_name.split())))
-    df_client_song.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format('_'.join(song_name.split())))
+    df_client_single_song_detail.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format('_'.join(song_name.split())))
     logging.info("The CLIENT and PLATFORM_ALL files have been outputted to the debug folder")
 
 
     try: 
         # To the final match between the client statements and the platform data
-        matched_df, unmatched_df = match_tracks_v2(df_client_song,df_platform_concat_all)
-        print(matched_df.columns, '----------------')
+        matched_df, unmatched_df = match_tracks_v2(df_client_single_song_detail,df_platform_concat_all)
+        logging.info(', '.join(matched_df.columns) + '----------------')
         # sort the values based on the comments in descending order
         if not unmatched_df.empty:
             logging.info("now sort the values in unmatched dataframe based on the comments count...")
@@ -236,7 +236,7 @@ def process_one_song(song_index, song_name, df_client_song):
             matched_df['p_stream_count_1'] = matched_df['p_stream_count_1'].fillna(0)
             matched_df['p_stream_count_2'] = matched_df['p_stream_count_2'].fillna(0)
             matched_df['p_streams'] = matched_df.apply(
-                    lambda row: 'NA' if (row['p_stream_count_1'] == 'NA' or row['p_stream_count_2'] == 'NA') 
+                    lambda row: 0 if (row['p_stream_count_1'] == 'NA' or row['p_stream_count_2'] == 'NA') 
                     else max([row['p_stream_count_1'], row['p_stream_count_2']]), 
                     axis =1)
             matched_df.drop(columns= DROP_COLUMNS, inplace=True)
@@ -255,25 +255,29 @@ def process_one_song(song_index, song_name, df_client_song):
             # print(temp_cols)
             matched_df = matched_df.loc[:, temp_cols]
 
+        # logging.info("now output the merged summary data (internal) to output folder for song {}".format(song_name))
+        # matched_df.to_excel(OUTPUT_PATH / "excel" / "summary_internal{}.xlsx".format('_'.join(song_name.split())))
+        # matched_df.to_pickle(OUTPUT_PATH / "pickle" / "summary_internal{}.pkl".format('_'.join(song_name.split())) )
         # now create the summary df for the current song
         matched_summary_df = get_summary_from_platform_matched_df(matched_df)
 
         # now merge the match_summary_df with the summary data from the client statements
-        logging.debug(str(df_summary_client.T))
-        logging.debug(f"{df_summary_client.columns = }")
-        df_summary_client = df_summary_client.merge(matched_summary_df, on=['cc_track','cc_version'], how='left')
+        logging.debug(str(df_client_single_song_summary.T))
+        logging.debug(f"{df_client_single_song_summary.columns = }")
 
-        logging.debug(f"{df_summary_client.columns = }")
-        logging.debug(str(df_summary_client.T))
+        df_final_single_song_summary_client = df_client_single_song_summary.merge(matched_summary_df, on=['cc_track','cc_version'], how='left')
+
+        logging.debug(f"{df_final_single_song_summary_client.columns = }")
+        logging.debug(str(df_final_single_song_summary_client.T))
         # add the total revenue and total comment columns
-        df_summary_client[('Catalog Overview', 'Total Revenue')] = df_summary_client.apply(
+        df_final_single_song_summary_client[('Catalog Metadata', 'Total Revenue')] = df_final_single_song_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'Total Revenue' in idx[1]), axis=1)
-        df_summary_client[('Catalog Overview','Total Streams')] = df_summary_client.apply(
+        df_final_single_song_summary_client[('Catalog Metadata','Total Streams')] = df_final_single_song_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'Total Streams' in idx[1]), axis=1)
-        df_summary_client[('Catalog Overview','Total Comments')] = df_summary_client.apply(
+        df_final_single_song_summary_client[('Catalog Overview','Total Comments')] = df_final_single_song_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'Comments' in idx[1]), axis=1)
 
-        logging.debug(f"{df_summary_client.columns = }")
+        logging.debug(f"{df_final_single_song_summary_client.columns = }")
         # reorg the column sequence
         # columns = SUMMARY_OUTPUT_COLUMNS + sorted([
             # x for x in df_summary_client.columns if x not in SUMMARY_OUTPUT_COLUMNS]) 
@@ -286,11 +290,11 @@ def process_one_song(song_index, song_name, df_client_song):
         # df_summary_client.columns = pd.MultiIndex.from_tuples(columns_new)
 
         logging.info("now output the merged summary data to output folder for song {}".format(song_name))
-        df_summary_client.to_excel(OUTPUT_PATH / "excel" / "summary_{}.xlsx".format('_'.join(song_name.split())))
-        df_summary_client.to_pickle(OUTPUT_PATH / "pickle" / "summary_{}.pkl".format('_'.join(song_name.split())) )
+        df_final_single_song_summary_client.to_excel(OUTPUT_PATH / "excel" / "summary_client{}.xlsx".format('_'.join(song_name.split())))
+        df_final_single_song_summary_client.to_pickle(OUTPUT_PATH / "pickle" / "summary_client{}.pkl".format('_'.join(song_name.split())) )
 
-        single_result_excel_path = OUTPUT_PATH / "excel" / "N{:06d}-{}-matched_v4.xlsx".format(song_index,'_'.join( song_name.split()))
-        single_result_pickle_path = OUTPUT_PATH / "pickle" / "N{:06d}-{}.pkl".format(song_index,'_'.join( song_name.split()))
+        single_result_excel_path = OUTPUT_PATH / "excel" / "N{:06d}-{}-matched_internal.xlsx".format(song_index,'_'.join( song_name.split()))
+        single_result_pickle_path = OUTPUT_PATH / "pickle" / "N{:06d}-{}-matched_internal.pkl".format(song_index,'_'.join( song_name.split()))
 
         save_result_to_excel_or_pickle(matched_df, unmatched_df, single_result_excel_path, output_pickle_path=single_result_pickle_path)
 
@@ -391,7 +395,7 @@ def get_summary_from_platform_matched_df(temp_df):
     unclaimed_streams_by_db = unclaimed_streams_by_db.reindex(all_values_combination, fill_value = 0)
     unclaimed_streams_by_db.name = 'Streams (Unclaimed)'
 
-    matched_summary = pd.concat([matched_count_by_db, unmatched_count_by_db, 
+    matched_summary_client = pd.concat([matched_count_by_db, unmatched_count_by_db, 
                                  claimed_comments_by_db, unclaimed_comments_by_db,
                                  claimed_likes_by_db, unclaimed_likes_by_db,
                                  claimed_streams_by_db, unclaimed_streams_by_db], axis=1)
@@ -405,15 +409,15 @@ def get_summary_from_platform_matched_df(temp_df):
     # matched_summary = pd.concat([matched_summary, df_temp], axis=1) 
     # matched_summary = matched_summary.rename(columns={'p_comments': 'comments', 'p_likes_count': 'likes'})
     # matched_summary.drop(columns=['streams_v1', 'streams_v2'], inplace=True)
-    matched_summary = matched_summary.unstack()
+    matched_summary_client = matched_summary_client.unstack()
     logging.info('---the shape of match_df is: {}'.format(matched_df.shape))
-    matched_summary.columns = [(PLATFORM_NAME_MAPPING_DICT.get(col[1], col[1]), col[0]) for col in matched_summary.columns.values] # swap the level of the column name
+    matched_summary_client.columns = [(PLATFORM_NAME_MAPPING_DICT.get(col[1], col[1]), col[0]) for col in matched_summary_client.columns.values] # swap the level of the column name
 
-    matched_summary[('Catalog Overview', 'Total Matches Detected')] = matched_count_series
-    logging.info("---the mathed_summary[matched count] is: {} ".format(list(matched_summary[('Catalog Overview', 'Total Matches Detected')])))
-    matched_summary.reset_index(inplace=True)
-    logging.debug(str(matched_summary))
-    return matched_summary
+    matched_summary_client[('Catalog Overview', 'Total Matches Detected')] = matched_count_series
+    logging.info("---the mathed_summary[matched count] is: {} ".format(list(matched_summary_client[('Catalog Overview', 'Total Matches Detected')])))
+    matched_summary_client.reset_index(inplace=True)
+    logging.debug(str(matched_summary_client))
+    return matched_summary_client
     
 
 # the following function is to get the summary information for a given song based on the client statements data

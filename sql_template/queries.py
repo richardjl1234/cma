@@ -32,7 +32,7 @@ where audit_songs.song_name ilike '%{song_name}%'
 SELECT audio_id, singer_id, ks.language, ori_author_name, 
 work_name, ks.cid, ks.scrape_date, ks.combine_count, 
 'NA' as p_likes_count, 'NA' as p_stream_count_1, 'NA' as p_stream_count_2,
-ks.album_id, ks.publish_company, 
+ks.album_id, ks.publish_company, ka.publish_date,
 ks.raw_json_1, singer_ids, singer_names, combine_count_v2, 
 ka.album_name
 FROM kugou_songs ks
