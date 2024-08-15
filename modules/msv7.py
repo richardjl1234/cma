@@ -7,18 +7,9 @@ import pickle
 # Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
-from settings import   LOG_LEVEL, VERSION_ALIAS
+from settings import   LOG_LEVEL, VERSION_ALIAS, PLATFORM_COLS, CLIENT_COLS
 from modules.common import timeit
 
-CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 
-               'Unique Song ID', 'Unique Version ID', 
-               'c_album', 'c_platform',
-               'c_revenue', 'c_track', 'c_artist', 'c_revenue']
-PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 
-                 'pc_artist', 'pc_version', 'refine_process_comment', 
-                 'refine_similarity', 'p_platform', 'p_album', 
-                 'p_comments', 'p_company', 'p_release_date',
-                 'p_likes_count', 'p_stream_count_1', 'p_stream_count_2'] 
 
 
 def extract_columns(excel_path, csv_path):

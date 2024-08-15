@@ -290,6 +290,7 @@ def main():
        # save to detail and summary to internal sheets
        dfs_final_summary_internal.to_excel(writer, sheet_name='Catalogue overview (internal)', index=True)
 
+       dfs_final_details_internal.drop(columns=['c_platform'], inplace=True)
        dfs_final_details_internal.to_excel(writer, sheet_name='All Matches (internal)', index=True)
     
     logging.info("📊 Matched summary and details are saved to Excel file {}. ".format(str(final_result_name)) )

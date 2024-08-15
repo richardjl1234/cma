@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 from settings import  OUTPUT_PATH, PLATFORMS_DB_IN_SCOPE, get_conn_params, COLUMN_MAPPING, LOG_LEVEL, DataFeed, PLATFORM_IN_SCOPE_CLIENT_STATEMENT
-from settings import  PLATFORM_NAME_MAPPING_DICT
+from settings import  PLATFORM_NAME_MAPPING_DICT , CLIENT_COLS,  PLATFORM_COLS
 from sql_template.queries import SQL_SONG  # the query template for select song name from platforms
 from modules.rds_access import execute_sql_query_retriable, DatabaseQueryException
 
@@ -18,7 +18,7 @@ from collections import namedtuple
 from modules.pc_platform import clean_song_data
 from modules.refine_platform_song_rows import refine_platform_song_rows_v2
 
-from modules.msv7 import preprocess_data, match_tracks_v2,  CLIENT_COLS, PLATFORM_COLS, save_result_to_excel_or_pickle
+from modules.msv7 import preprocess_data, match_tracks_v2,    save_result_to_excel_or_pickle
 
 pd.options.mode.chained_assignment = None
 

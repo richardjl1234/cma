@@ -3,7 +3,7 @@
 SQL_SONG = {"qqmusicv2": """
 SELECT song_mid, song_name, album_mid, album_name, artist_mid, singer_names,
 comment_number, singer_mids, company, release_date, 
-'NA' as p_likes_count, 'NA' as p_stream_count_1, 'NA' as p_stream_count_2
+'NA' as p_likes_count, 'NA' as p_stream_count_1, 'NA' as p_stream_count_2, 'NA' as copyright_id
 FROM songs
 where song_name ilike '%{song_name}%'
 """, 

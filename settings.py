@@ -5,7 +5,7 @@ import logging
 from collections import namedtuple
 
 # LOG_LEVEL=logging.INFO
-LOG_LEVEL=logging.DEBUG
+LOG_LEVEL=logging.INFO
 
 # output format for summary and detail
 
@@ -47,7 +47,6 @@ PLATFORM_NAME_MAPPING_DICT = {
 #     'tencent': 'tencent' # handle tencent c_revenue
 # }
 
-
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
 
@@ -56,12 +55,12 @@ INPUT_PATH = "input_data"
  
 # INPUT_FILE = "cc_soave.pkl"  
 # INPUT_FILE = "Two Steps Test.xlsx"  
-# INPUT_FILE = "cc_soave.xlsx"  
-INPUT_FILE = "cc_twosteps.pkl"  
+INPUT_FILE = "cc_soave.xlsx"  
+# INPUT_FILE = "cc_twosteps.pkl"  
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_SONG_INDEX =0  # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 5 # specfiy when the process will be stopped
+END_SONG_INDEX = 99 # specfiy when the process will be stopped
 
 ##############################################################
 # the column mapping from query result to the pc_columns
@@ -86,7 +85,9 @@ COLUMN_MAPPING = {
         'deprecated_artist_name': 'p_artist',
         'company': 'p_company',
         'release_date': 'p_release_date',
-        'comment_count': 'p_comments'}, 
+        'comment_count': 'p_comments', 
+        'copyright_id': 'copyright_id',
+        }, 
     'kugou': {
         'audio_id': 'p_song_id',
         'work_name': 'p_track',
@@ -96,11 +97,21 @@ COLUMN_MAPPING = {
         'ori_author_name': 'p_artist',
         'publish_company': 'p_company',
         'publish_date': 'p_release_date',
-        'combine_count': 'p_comments'
+        'combine_count': 'p_comments', 
+        'cid': "copyright_id", 
     }
 
 }
 
+CLIENT_COLS = ['cc_track', 'cc_version', 'c_track', 'cc_artist', 
+               'Unique Song ID', 'Unique Version ID', 
+               'c_album', 'c_platform',
+               'c_revenue', 'c_track', 'c_artist', 'c_revenue']
+PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track', 
+                 'pc_artist', 'pc_version', 'refine_process_comment', 
+                 'refine_similarity', 'p_platform', 'p_album', 
+                 'p_comments', 'p_company', 'p_release_date',
+                 'p_likes_count', 'p_stream_count_1', 'p_stream_count_2', 'copyright_id'] 
 ##############################################################
 # generate the connection parameter for a platform, it returns the connection parameters when connect to the postgresql database
 def get_conn_params(platform):
