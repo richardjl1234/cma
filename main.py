@@ -63,6 +63,10 @@ def get_song_statement_data(client_statement_file, input_folder= INPUT_PATH)   :
     # update the cc_version na to be generic
     df_songs['cc_version'] = df_songs['cc_version'].fillna('generic')
 
+    ## for milestone5, patch to address the null value in cc_artist and c_album
+    df_songs['cc_artist'] = df_songs['cc_artist'].astype(str)
+    df_songs['c_album'] = df_songs['c_album'].astype(str)
+
     logging.info("There are {} unique song names in the dataframe...\n".format(len(song_names)))
     logging.debug("The list of the song names are: {}".format(', '.join(song_names)))
     logging.debug("The column names in the df_songs are:\n {} \n".format(', '.join(df_songs.columns)))

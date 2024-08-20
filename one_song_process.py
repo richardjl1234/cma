@@ -123,7 +123,7 @@ def retrieve_clean_refine_platform_song_data(data_feed):
     if LOG_LEVEL == logging.DEBUG:
         df_platform_cleaned_song.to_pickle(OUTPUT_PATH/ "debug" / "{platform}-{song_name}.pkl".format(
             platform= data_feed.platform, 
-            song_name = data_feed.song_name))
+            song_name = data_feed.song_name.replace("?", '')))
     
     ######################################################################
     # REFINEMENT 
@@ -213,9 +213,12 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
         logging.error("Failed to process '{}'".format(song_name))
         print(df_platform_concat_all.head())
 
+
     ## when log_level is debug, then output the file to debug folder 
-    df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format('_'.join(song_name.split())))
-    df_client_single_song_detail.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format('_'.join(song_name.split())))
+    # milestone 5, remove the punctuations in the song name when saving data to disk
+    song_file_name = '_'.join(song_name.replace("?", '').split())
+    df_platform_concat_all.to_pickle(OUTPUT_PATH/ "debug"/ "PLATFORM_ALL_{}.pkl".format(song_file_name))
+    df_client_single_song_detail.to_pickle(OUTPUT_PATH/ "debug" / "CLIENT_{}.pkl".format(song_file_name))
     logging.info("The CLIENT and PLATFORM_ALL files have been outputted to the debug folder")
 
 
@@ -290,11 +293,12 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
         # df_summary_client.columns = pd.MultiIndex.from_tuples(columns_new)
 
         logging.info("now output the merged summary data to output folder for song {}".format(song_name))
-        df_final_single_song_summary_client.to_excel(OUTPUT_PATH / "excel" / "summary_client{}.xlsx".format('_'.join(song_name.split())))
-        df_final_single_song_summary_client.to_pickle(OUTPUT_PATH / "pickle" / "summary_client{}.pkl".format('_'.join(song_name.split())) )
+        # song_file_name = '_'.join(song_name.replace("?", '').split())
+        df_final_single_song_summary_client.to_excel(OUTPUT_PATH / "excel" / "summary_client{}.xlsx".format(song_file_name))
+        df_final_single_song_summary_client.to_pickle(OUTPUT_PATH / "pickle" / "summary_client{}.pkl".format(song_file_name) )
 
-        single_result_excel_path = OUTPUT_PATH / "excel" / "N{:06d}-{}-matched_internal.xlsx".format(song_index,'_'.join( song_name.split()))
-        single_result_pickle_path = OUTPUT_PATH / "pickle" / "N{:06d}-{}-matched_internal.pkl".format(song_index,'_'.join( song_name.split()))
+        single_result_excel_path = OUTPUT_PATH / "excel" / "N{:06d}-{}-matched_internal.xlsx".format(song_index,song_file_name)
+        single_result_pickle_path = OUTPUT_PATH / "pickle" / "N{:06d}-{}-matched_internal.pkl".format(song_index,song_file_name)
 
         save_result_to_excel_or_pickle(matched_df, unmatched_df, single_result_excel_path, output_pickle_path=single_result_pickle_path)
 
