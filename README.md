@@ -12,7 +12,7 @@ This application is a standalone music audit program.
 pip install -r requirements.txt
 ```
 1.  Prepare the client statements document, and list of the artists name.
-1.  Create the folder `input_data`, `output`, `output/debug` and `log` folder. 
+1.  Create the folder `input_data`, `output`, `output/debug`, `output/excel`, `output/pickle`, `outout/archive` and `log` folder. Run the following command so that those folders will be created. `sh startup.sh`
 1.  Setup the database username and password in local environment. When the application is running, it will get the following envionment vaiable value. 
 ```
 POSTGRE_USER=
