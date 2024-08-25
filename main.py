@@ -257,7 +257,7 @@ def main():
     df_songs.set_index(['cc_track', 'cc_version'], inplace=True)
     artist_dict = df_songs['c_artist'].to_dict()
 
-    track_title_dict = df_songs['Track Title'].to_dict()
+    track_title_dict = df_songs['c_track'].to_dict()
     unique_song_id_dict = df_songs['Unique Song ID'].to_dict()
 
     dfs_final_summary_client.set_index(['cc_track', 'cc_version'], inplace=True)

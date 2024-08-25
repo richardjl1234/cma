@@ -7,4 +7,4 @@ input_data/**
 temp/** 
 output/**
 log/**
-
+notebooks/*.csv
