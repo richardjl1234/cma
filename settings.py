@@ -5,7 +5,7 @@ import logging
 from collections import namedtuple
 
 # LOG_LEVEL=logging.INFO
-LOG_LEVEL=logging.INFO
+LOG_LEVEL=logging.DEBUG
 
 # output format for summary and detail
 
@@ -56,7 +56,8 @@ INPUT_PATH = "input_data"
 # INPUT_FILE = "cc_soave.pkl"  
 # INPUT_FILE = "Two Steps Test.xlsx"  
 #INPUT_FILE = "cc_soave.xlsx"  
-INPUT_FILE = "cc_nico.xlsx"  
+#INPUT_FILE = "cc_nico.xlsx"  
+INPUT_FILE = "cc_nico_test.pkl"  
 # INPUT_FILE = "cc_twosteps.pkl"  
 
 # This is useful when we need to resume the process from the previous aborted process 

@@ -436,8 +436,8 @@ def get_summary_data_from_client_df(df_client_song_input):
     df_client_song = df_client_song_input.copy()
 
     df_client_song['c_platform'] = df_client_song['c_platform'].str.strip()
-    filter_platform = df_client_song['c_platform'].apply(lambda x: x in PLATFORM_IN_SCOPE_CLIENT_STATEMENT)
-    df_client_song = df_client_song.loc[filter_platform, :]
+    # filter_platform = df_client_song['c_platform'].apply(lambda x: x in PLATFORM_IN_SCOPE_CLIENT_STATEMENT)
+    # df_client_song = df_client_song.loc[filter_platform, :]
 
     all_values_combination = [(*x ,platform)
             for x in df_client_song.set_index(['cc_track', 'cc_version']).index.unique()
