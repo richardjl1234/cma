@@ -6,23 +6,25 @@ This application is a standalone music audit program.
 
 ### User Guide: 
 
+1. Unzip the zip file 
+1. Go to the folder where the audit programs are unzipped. 
 1.  Make sure python enviroment is installed. 
 1.  Install the necessary packages by executing the following command: 
 ```
 pip install -r requirements.txt
 ```
-1.  Prepare the client statements document, and list of the artists name.
 1.  Create the folder `input_data`, `output`, `output/debug`, `output/excel`, `output/pickle`, `outout/archive` and `log` folder. Run the following command so that those folders will be created. 
 ```
 sh startup.sh
 ```
+1.  Prepare the client statements document, copy the input file into the the folder `input_data` 
 1.  Setup the database username and password in local environment. When the application is running, it will get the following envionment vaiable value. 
 ```
 POSTGRE_USER=
 POSTGRE_PWD=
 POSTGRE_HOST=
 ```
-4.  Update the settings.py to setup the paremeters which are needed by the application. The following variables can be customized: 
+4.  Update the settings.py to setup the paremeters which are needed by the application. The following variables can be customized. Most importantly, update the `INPUT_FILE`, `START_SONG_INDEX` and `END_SONG_INDEX`
 ```
 LOG_LEVEL=logging.DEBUG
 
@@ -41,8 +43,7 @@ START_SONG_INDEX = 0 # specfiy the start song index. This index is INCLUDED
 END_SONG_INDEX = 30 # specfiy when the process will be stopped
 
 ```
-
-4.  The application is a long run program, it might terminate unexpectedly. The application supports restart operation. Just run the following command, and the program will resumed from where it was stopped: 
+5.  The application is a long run program, it might terminate unexpectedly. The application supports restart operation. Just run the following command, and the program will resumed from where it was stopped: 
 ```
 python main.py restart
 ```

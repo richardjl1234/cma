@@ -323,7 +323,7 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
 def customized_summary(series):
     # if all([x == 'NA' or x is np.nan for x in series.values]):
     #     return 'NA'
-    non_nan_values = [x for x in series.values if x != 'NA' and x is not np.nan and x >=0]
+    non_nan_values = [int(x) for x in series.values if x != 'NA' and x is not np.nan and x is not None]
     return sum(non_nan_values)
 
     # if any([x== 'NA' for x in series.values]):
