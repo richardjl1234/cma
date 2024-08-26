@@ -92,7 +92,7 @@ def create_final_details_client_df(df_matched_detail: pd.DataFrame, df_client_su
     df_output[('Catalog Metadata ', 'Reference Track')] = df_input['c_track']
     df_output[('Catalog Metadata ', 'Ref. Artist')] = df_input['c_artist']
     # platform 
-    df_output[('Catalog Metadata ', 'Platform')] = df_input['p_platform'].map({'netease_max': 'NetEase', 'kugou': "Tencent", 'qqmusicv2': 'Tencent'})
+    df_output[('Catalog Metadata ', 'Platform')] = df_input['p_platform'].map({'netease_max': 'NetEase', 'kugou': "Kugou", 'qqmusicv2': 'QQMusic'})
 
     # TODO how to remove those hardcoding
     # revenue
