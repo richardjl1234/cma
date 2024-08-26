@@ -80,6 +80,7 @@ def get_artist_alias(x):
             return v
     return x
 
+# this function for All match sheet (present to client)
 def create_final_details_client_df(df_matched_detail: pd.DataFrame, df_client_summary: pd.DataFrame) -> pd.DataFrame: 
     logging.debug(f'{df_client_summary.columns =}')
     df_input = df_matched_detail.merge(df_client_summary, on=['cc_track', 'cc_version'])
@@ -239,7 +240,7 @@ def main():
     ## TODO to fix the issues 
     # special logic to calculate the total comment for those tencent related platform
     # dfs_summary[('tencent', 'tencent total comments')] = dfs_summary.apply(
-    #     lambda row: sum( [row[('tencent', '{} p_comments'.format(p))] 
+    #     lambda row: sum(summary_clientsummary_client [row[('tencent', '{} p_comments'.format(p))] 
     #          for p in TENCENT_COVERAGE]), 
     #          axis=1)
 
@@ -280,6 +281,8 @@ def main():
     # for cols in dfs_client_platform_merged.columns:
     #     print(cols)
 
+    # dfs_final_summary_client.to_excel(OUTPUT_PATH/ 'excel' / 'temp112.xlsx')
+
     dfs_final_summary_client = reorg_final_result(dfs_final_summary_client)
 
     # dfs_client_platform_merged.to_excel(OUTPUT_PATH / "matched_result_summary.xlsx", index=True)
@@ -316,24 +319,24 @@ def reorg_final_result(df: pd.DataFrame):
 
     df[('Catalog Overview', 'Estimated Revenue')] = ''
     df[('Catalog Overview', 'Estimated Streams')] = ''
-    df[('Catalog Overview', 'Total Favorites')] = ''
+    # df[('Catalog Overview', 'Total Favorites')] = ''
 
     if 'NetEase Cloud Music' in PLATFORM_NAME_MAPPING_DICT.values():  
         df[('NetEase Cloud Music', 'Total Matches')] = df[('NetEase Cloud Music', 'Claimed Matches')] + df[('NetEase Cloud Music', 'Unclaimed Matches')]
-        df[('NetEase Cloud Music', 'Favorites (Claimed)')] =  ''
-        df[('NetEase Cloud Music', 'Favorites (Unclaimed)')] =  ''
+        # df[('NetEase Cloud Music', 'Favorites (Claimed)')] =  ''
+        # df[('NetEase Cloud Music', 'Favorites (Unclaimed)')] =  ''
         df[('NetEase Cloud Music', 'Revenue')] =  df[('Catalog Overview', 'NetEase Total Revenue')]
 
     if 'Kugou Music' in PLATFORM_NAME_MAPPING_DICT.values():  
         df[('Kugou Music', 'Total Matches')] = df[('Kugou Music', 'Claimed Matches')] + df[('Kugou Music', 'Unclaimed Matches')]
-        df[('Kugou Music', 'Favorites (Claimed)')] =  ''
-        df[('Kugou Music', 'Favorites (Unclaimed)')] =  ''
+        # df[('Kugou Music', 'Favorites (Claimed)')] =  ''
+        # df[('Kugou Music', 'Favorites (Unclaimed)')] =  ''
         df[('Kugou Music', 'Revenue')] =  df[('Catalog Overview', 'Kugou Music Total Revenue')]
 
     if 'QQ Music' in PLATFORM_NAME_MAPPING_DICT.values():  
         df[('QQ Music', 'Total Matches')] = df[('QQ Music', 'Claimed Matches')] + df[('QQ Music', 'Unclaimed Matches')]
-        df[('QQ Music', 'Favorites (Claimed)')] =  ''
-        df[('QQ Music', 'Favorites (Unclaimed)')] =  ''
+        # df[('QQ Music', 'Favorites (Claimed)')] =  ''
+        # df[('QQ Music', 'Favorites (Unclaimed)')] =  ''
         df[('QQ Music', 'Revenue')] =  df[('Catalog Overview', 'QQ Music Total Revenue')]
     columns = [
         ('Catalog Metadata', 'Unique Song ID'), 
@@ -412,12 +415,14 @@ def reorg_final_result(df: pd.DataFrame):
 
     return df
 
+# for Catalogue overview (internal) sheet
 def create_summary_internal_df(df_summary_client: pd.DataFrame):
     df_summary_internal = pd.DataFrame() 
 
     df_summary_internal['Unique Song ID'] = df_summary_client[('Catalog Metadata', 'Unique Song ID')]
     df_summary_internal['matched count'] = df_summary_client[('Catalog Overview', 'Total Matches Detected')]
     df_summary_internal['Total Comments'] = df_summary_client[('Catalog Overview', 'Total Comments')]
+    df_summary_internal['Total Favorites'] = df_summary_client[('Catalog Overview', 'Total Favorites')]
     df_summary_internal['Total Revenue'] = df_summary_client[('Catalog Metadata', 'Total Revenue')]
     df_summary_internal['cc_track'] = df_summary_client['cc_track']
     df_summary_internal['cc_version'] = df_summary_client['cc_version']
@@ -437,8 +442,8 @@ def create_summary_internal_df(df_summary_client: pd.DataFrame):
     p_column_mapping_dict = {
         'Comments (Claimed)': 'p_comments (Claimed)',
         'Comments (Unclaimed)': 'p_comments (Unclaimed)', 
-        'Likes (Claimed)': 'p_likes_count (Claimed)',
-        'Likes (Unclaimed)': 'p_likes_count (Unclaimed)', 
+        'Favorites (Claimed)': 'p_likes_count (Claimed)',
+        'Favorites (Unclaimed)': 'p_likes_count (Unclaimed)', 
         'Streams (Claimed)': 'p_streams (Claimed)',
         'Streams (Unclaimed)': 'p_streams (Unclaimed)', 
     }

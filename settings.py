@@ -55,14 +55,15 @@ INPUT_PATH = "input_data"
  
 # INPUT_FILE = "cc_soave.pkl"  
 # INPUT_FILE = "Two Steps Test.xlsx"  
-#INPUT_FILE = "cc_soave.xlsx"  
+# INPUT_FILE = "cc_soave.xlsx"  
 # INPUT_FILE = "cc_nico.xlsx"  
-INPUT_FILE = "cc_nico_test4.pkl"  
+#INPUT_FILE = "cc_nico_test1.pkl"  
+INPUT_FILE = "cc_nico_test_whereislove.pkl"  
 # INPUT_FILE = "cc_twosteps.pkl"  
 
 # This is useful when we need to resume the process from the previous aborted process 
 START_SONG_INDEX =0  # specfiy the start song index. This index is INCLUDED
-END_SONG_INDEX = 27 # specfiy when the process will be stopped
+END_SONG_INDEX = 0 # specfiy when the process will be stopped
 
 ##############################################################
 # the column mapping from query result to the pc_columns

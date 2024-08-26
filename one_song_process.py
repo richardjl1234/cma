@@ -225,6 +225,7 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
     try: 
         # To the final match between the client statements and the platform data
         matched_df, unmatched_df = match_tracks_v2(df_client_single_song_detail,df_platform_concat_all)
+        logging.debug(f"{str(matched_df) =}")
         logging.info(', '.join(matched_df.columns) + '----------------')
         # sort the values based on the comments in descending order
         if not unmatched_df.empty:
@@ -257,12 +258,15 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
             temp_cols.append('refine_similarity')
             # print(temp_cols)
             matched_df = matched_df.loc[:, temp_cols]
+            
 
         # logging.info("now output the merged summary data (internal) to output folder for song {}".format(song_name))
         # matched_df.to_excel(OUTPUT_PATH / "excel" / "summary_internal{}.xlsx".format('_'.join(song_name.split())))
         # matched_df.to_pickle(OUTPUT_PATH / "pickle" / "summary_internal{}.pkl".format('_'.join(song_name.split())) )
         # now create the summary df for the current song
         matched_summary_df = get_summary_from_platform_matched_df(matched_df)
+        # matched_summary_df.to_excel(OUTPUT_PATH/"excel"/"temp111.xlsx")
+
 
         # now merge the match_summary_df with the summary data from the client statements
         logging.debug(str(df_client_single_song_summary.T))
@@ -279,6 +283,10 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
             lambda row: sum(row[idx] for idx in row.index if 'Total Streams' in idx[1]), axis=1)
         df_final_single_song_summary_client[('Catalog Overview','Total Comments')] = df_final_single_song_summary_client.apply(
             lambda row: sum(row[idx] for idx in row.index if 'Comments' in idx[1]), axis=1)
+        df_final_single_song_summary_client[('Catalog Overview','Total Favorites')] = df_final_single_song_summary_client.apply(
+            lambda row: sum(row[idx] for idx in row.index if 'Favorites' in idx[1]), axis=1)
+
+        logging.debug(f"{df_final_single_song_summary_client[('Catalog Overview','Total Favorites')] =}")
 
         logging.debug(f"{df_final_single_song_summary_client.columns = }")
         # reorg the column sequence
@@ -313,10 +321,15 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
 
 
 def customized_summary(series):
-    if any([x== 'NA' for x in series.values]):
-        return np.nan
-    else: 
-        return series.sum()
+    # if all([x == 'NA' or x is np.nan for x in series.values]):
+    #     return 'NA'
+    non_nan_values = [x for x in series.values if x != 'NA' and x is not np.nan and x >=0]
+    return sum(non_nan_values)
+
+    # if any([x== 'NA' for x in series.values]):
+    #     return np.nan
+    # else: 
+    #     return series.sum()
 
 
 # get the summary comments, likes and streams based on the match_df
@@ -325,7 +338,8 @@ def get_summary_from_platform_matched_df(temp_df):
 
     matched_df = temp_df.copy()
     matched_df = matched_df.loc[:, ['cc_track',  'cc_version', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams', 'pc_version']]
-    logging.debug(str(matched_df))
+    logging.debug(f"{matched_df['p_likes_count'] = }")
+
     # add dummary row for each in-scope platform
     song_name = list(matched_df['cc_track'])[0]
     versions = matched_df['cc_version'].unique()
@@ -371,19 +385,21 @@ def get_summary_from_platform_matched_df(temp_df):
     unclaimed_comments_by_db = unclaimed_comments_by_db.reindex(all_values_combination, fill_value = 0)
     unclaimed_comments_by_db.name = 'Comments (Unclaimed)'
 
-    # CLAIMED LIKES 
+    # CLAIMED LIKES (Favorites)
     claimed_likes_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_likes_count'].agg(customized_summary)
                                            # claimed likes
     claimed_likes_by_db = claimed_likes_by_db.reindex(all_values_combination, fill_value = 0)
-    claimed_likes_by_db.name = 'Likes (Claimed)' 
+    claimed_likes_by_db.name = 'Favorites (Claimed)' 
+    logging.debug(f"{claimed_likes_by_db = }")
 
-    # UNCLAIMED LIKES 
+    # UNCLAIMED LIKES (Favorites)
     unclaimed_likes_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'],
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_likes_count'].agg(customized_summary)
                                            # unclaimed likes
     unclaimed_likes_by_db = unclaimed_likes_by_db.reindex(all_values_combination, fill_value = 0)
-    unclaimed_likes_by_db.name = 'Likes (Unclaimed)'
+    unclaimed_likes_by_db.name = 'Favorites (Unclaimed)'
+    logging.debug(f"{unclaimed_likes_by_db = }")
 
     # CLAIMED STREAMS
     claimed_streams_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
@@ -420,7 +436,7 @@ def get_summary_from_platform_matched_df(temp_df):
     matched_summary_client[('Catalog Overview', 'Total Matches Detected')] = matched_count_series
     logging.info("---the mathed_summary[matched count] is: {} ".format(list(matched_summary_client[('Catalog Overview', 'Total Matches Detected')])))
     matched_summary_client.reset_index(inplace=True)
-    logging.debug(str(matched_summary_client))
+    # logging.debug(str(matched_summary_client))
     return matched_summary_client
     
 
