@@ -122,7 +122,7 @@ def create_final_details_client_df(df_matched_detail: pd.DataFrame, df_client_su
     # claimed or not
     df_output[('Track Status', 'Claim Status ')] = df_input.apply(
         lambda row: 
-        'claimed' if row['pc_version'] == row['cc_version']
+        'claimed' if row['pc_version'] == row['cc_version'] and row['refine_platform_match'] is True
         else 'unclaimed'
         ,axis=1)
 
@@ -272,6 +272,12 @@ def main():
     dfs_final_summary_internal = create_summary_internal_df(dfs_final_summary_client)
 
     dfs_final_details_internal = dfs_final_details_internal.reset_index(drop=True)
+    # milestone 5
+    dfs_final_details_internal = dfs_final_details_internal.drop_duplicates()
+    
+    # dfs_final_details_internal.to_excel(OUTPUT_PATH/"excel"/'temp1.xlsx')
+    # dfs_final_summary_client.to_excel(OUTPUT_PATH/'excel'/'temp2.xlsx')
+
     dfs_final_details_client = create_final_details_client_df(dfs_final_details_internal, dfs_final_summary_client)
 
     dfs_final_summary_client.drop(columns=['cc_track', 'cc_version'], inplace=True)

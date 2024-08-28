@@ -23,7 +23,7 @@ from modules.msv7 import preprocess_data, match_tracks_v2,    save_result_to_exc
 pd.options.mode.chained_assignment = None
 
 SUMMARY_OUTPUT_COLUMNS = ['Total Comments', "Total Revenue", 'Total Streams', "cc_track", "cc_version", ]
-DROP_COLUMNS = ['p_stream_count_1', 'p_stream_count_2',  'match_id', 'c_revenue', ]
+DROP_COLUMNS = ['p_stream_count_1', 'p_stream_count_2',  'match_id', ]
 
 # @timeit
 # def take_snapshot(artist_seq_no,data_feed_seq_no, df_platform_concat_dict):
@@ -208,10 +208,16 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
 
     try: 
         df_platform_concat_all = df_platform_concat_all.loc[:,PLATFORM_COLS ]
+        # milestone 5
+        # df_client_single_song_detail.to_excel(OUTPUT_PATH/'excel'/'temp0.xlsx', index= False)
         df_client_single_song_detail, df_platform_concat_all = preprocess_data(df_client_single_song_detail, df_platform_concat_all ) 
+        # milestone 5
+        # df_client_single_song_detail.to_excel(OUTPUT_PATH/'excel'/'temp3.xlsx', index= False)
     except Exception as e:
         logging.error("Failed to process '{}'".format(song_name))
-        print(df_platform_concat_all.head())
+        logging.error(str(e))
+        print(df_platform_concat_all.head().T)
+        print(df_client_single_song_detail.head().T)
 
 
     ## when log_level is debug, then output the file to debug folder 
@@ -252,10 +258,12 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
             temp_cols.remove('p_streams')
             temp_cols.remove('refine_process_comment')
             temp_cols.remove('refine_similarity')
+            temp_cols.remove('refine_platform_match')
 
             temp_cols.insert(temp_cols.index('p_likes_count')+1, 'p_streams')
             temp_cols.append('refine_process_comment')
             temp_cols.append('refine_similarity')
+            temp_cols.append('refine_platform_match')
             # print(temp_cols)
             matched_df = matched_df.loc[:, temp_cols]
             
@@ -323,7 +331,8 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
 def customized_summary(series):
     # if all([x == 'NA' or x is np.nan for x in series.values]):
     #     return 'NA'
-    non_nan_values = [int(x) for x in series.values if x != 'NA' and x is not np.nan and x is not None]
+    values = series.fillna(0).copy()
+    non_nan_values = [int(x) for x in values if x != 'NA' ]
     return sum(non_nan_values)
 
     # if any([x== 'NA' for x in series.values]):

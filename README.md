@@ -47,10 +47,10 @@ END_SONG_INDEX = 30 # specfiy when the process will be stopped
 ```
 python main.py restart
 ```
+6. Once a song is process, the merge result will be output to the `output/matched_result_final.xlsx` file and `output/unmatched_result.csv`
 
 ### Technical information
 
 1. The application will remember for  which song has been process successfully. When the application is terminated unexpectedly, it will read the restart_song_index file and resume the process from where it was termicated.  
 1. Since each query usually will cost more than around 30 seconds, the retry mechanics is setup in the rds_access.py module. The query will try to rerun the query statement for a few times. When it fails, it will wait for 30 seconds and retry until the total retry limits is reached.
 1. The log will be printed on the console as well as output to the `log/song_audit-yyyymmdd.log` file.
-1. Once a song is process, the merge result will be output to the `output/matched_result_final.xlsx` file and `output/unmatched_result.csv`

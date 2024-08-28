@@ -7,7 +7,7 @@ import pickle
 # Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
-from settings import   LOG_LEVEL, VERSION_ALIAS, PLATFORM_COLS, CLIENT_COLS
+from settings import   LOG_LEVEL, VERSION_ALIAS, PLATFORM_COLS, CLIENT_COLS, PLATFORMS_DB_IN_SCOPE
 from modules.common import timeit
 
 
@@ -40,11 +40,21 @@ def preprocess_data(client_df, platform_df):
 
 
    # Aggregate the data to handle possible duplicates and reset the index
-   client_df = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album']).first().reset_index()
+   #client_df = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album']).first().reset_index()
+   # milestone 5
+   client_df0 = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album'])['c_platform'].agg(set)
+   client_df1 = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album'])['Unique Song ID'].first()
+   client_df2 = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album'])['Unique Version ID'].first()
+   client_df3 = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album'])['c_track'].first()
+   client_df4 = client_df.groupby(['cc_track', 'cc_version', 'cc_artist', 'c_album'])['c_artist'].first()
+   client_df_final = pd.concat([client_df0, client_df1, client_df2, client_df3, client_df4], axis=1)
+   client_df_final = client_df_final.reset_index()
+   client_df_final['c_platform'] = client_df_final['c_platform'].apply(tuple)
+
    logging.info("Data preprocessed.")
 
 
-   return client_df, platform_df
+   return client_df_final, platform_df
 
 @timeit
 def match_tracks(client_df, platform_df):
@@ -160,14 +170,10 @@ def run_matching_operation():
 
 ##################################################################################################################
 # check if the platform name match with each other
-def filter_platform_old(row_p, c_platform):
-    # return True
-    a =   ('netease' in row_p['p_platform'].lower().strip() and 'netease' in c_platform.lower().strip())
-    b =   ('kugou' in row_p['p_platform'].lower().strip() and 'kugou' in c_platform.lower().strip())
-    # logging.info(f"THE PLATFORM CHECK.... {b = }, {row_p['p_platform'] =}, {c_platform =}"  )
-    c =   ('qqmusic' in row_p['p_platform'].lower().strip() and 'qqmusic' in c_platform.lower().strip())
-    d =   ('kuwo' in row_p['p_platform'].lower().strip() and 'kuwo' in c_platform.lower().strip())
-    return a or b or c or d
+def filter_platform_exact_match(p_platform, c_platform): #c_platform should be a list of platform names 
+    a = PLATFORMS_DB_IN_SCOPE[p_platform].strip().lower()
+    b = [x.strip().lower() for x in c_platform]
+    return  a in b
 
 def filter_platform(row_p, c_platform):
     return True
@@ -252,12 +258,14 @@ def match_tracks_v2(df_client, df_platform):
            if filter_level1(row_p, row_c['cc_track'], row_c['cc_version'], row_c['cc_artist'], row_c['c_album'], row_c['c_platform'], song_versions):
                row_p['refine_process_comment'] = 'Track, version, artist, album Exact Match'
                row_p['refine_similarity'] = 1
+               row_p['refine_platform_match'] = filter_platform_exact_match(row_p['p_platform'], row_c['c_platform'])  # c_platform should be a list
                best_match = {**row_p.to_dict(), **row_c.to_dict(), 'match_id': idx_p + 1}
                matched_level = 1
            elif filter_level2(row_p, row_c['cc_track'], row_c['cc_version'], row_c['cc_artist'], row_c['c_album'], row_c['c_platform'], song_versions): 
                if matched_level > 2:
                    row_p['refine_process_comment'] = 'Track, Version, Artist Exact Match (album not match)'
                    row_p['refine_similarity'] = 2
+                   row_p['refine_platform_match'] = filter_platform_exact_match(row_p['p_platform'], row_c['c_platform'])  # c_platform should be a list
                    best_match = {**row_p.to_dict(), **row_c.to_dict(), 'match_id': idx_p + 1}
                    matched_level = 2
                else: 
@@ -266,6 +274,7 @@ def match_tracks_v2(df_client, df_platform):
                if matched_level > 3:
                    row_p['refine_process_comment'] = 'Track, Artist Match'
                    row_p['refine_similarity'] = 3
+                   row_p['refine_platform_match'] = filter_platform_exact_match(row_p['p_platform'], row_c['c_platform'])  # c_platform should be a list
                    best_match = {**row_p.to_dict(), **row_c.to_dict(), 'match_id': idx_p + 1}
                    matched_level = 3
                else: 
@@ -277,6 +286,7 @@ def match_tracks_v2(df_client, df_platform):
            if filter_song_name(row_p, row_c['cc_track']):
                row_p['refine_process_comment'] = 'Track Match Only'
                row_p['refine_similarity'] = 4
+               row_p['refine_platform_match'] = filter_platform_exact_match(row_p['p_platform'], row_c['c_platform'])  # c_platform should be a list
                unmatch_results.append(row_p.to_dict())
            else: 
                logging.warning("No match found for platform track: {}".format(row_p['pc_track']))
@@ -285,6 +295,8 @@ def match_tracks_v2(df_client, df_platform):
    logging.info("===== Matching completed.")
    
    matched_df = pd.DataFrame(match_results)
+   # milestone 5
+   matched_df = matched_df.drop_duplicates()
    unmatched_df = pd.DataFrame(unmatch_results)
 
    # get the unique song ids from the matched_df and unmatched_df
