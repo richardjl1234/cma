@@ -122,7 +122,7 @@ def create_final_details_client_df(df_matched_detail: pd.DataFrame, df_client_su
     # claimed or not
     df_output[('Track Status', 'Claim Status ')] = df_input.apply(
         lambda row: 
-        'claimed' if row['pc_version'] == row['cc_version'] and row['refine_platform_match'] is True
+        'claimed' if row['pc_version'] == row['cc_version'] and row['refine_platform_match'] == 'Y'
         else 'unclaimed'
         ,axis=1)
 

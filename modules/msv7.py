@@ -173,7 +173,7 @@ def run_matching_operation():
 def filter_platform_exact_match(p_platform, c_platform): #c_platform should be a list of platform names 
     a = PLATFORMS_DB_IN_SCOPE[p_platform].strip().lower()
     b = [x.strip().lower() for x in c_platform]
-    return  a in b
+    return  'Y' if a in b else "N"
 
 def filter_platform(row_p, c_platform):
     return True
