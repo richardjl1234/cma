@@ -7,8 +7,6 @@ from collections import namedtuple
 # LOG_LEVEL=logging.INFO
 LOG_LEVEL=logging.INFO
 
-# output format for summary and detail
-
 # artist and version alias mapping
 ARTIST_ALIAS = {
     "Two Steps From Hell": "Two Steps From Hell, Thomas Bergerson, Thomas Bergersen"
@@ -38,14 +36,6 @@ PLATFORM_NAME_MAPPING_DICT = {
     'qqmusicv2': 'QQ Music', 
     'kugou': 'Kugou Music', 
 }
-
-# PLATFORM_MAPPING = {
-#     'netease_max': 'netease',  # provide platform db mapped to platform name in client statement
-#     'kugou': 'tencent',  # provide platform db mapped to platform name in client statement
-#     # 'qqmusicv2': 'tencent', # provide platform db mapped to platform name in client statement
-#     'netease': 'netease',  # handle netease c_revenue
-#     'tencent': 'tencent' # handle tencent c_revenue
-# }
 
 LOG_PATH = Path('log')   # specify folder where the log files to be stored
 OUTPUT_PATH = Path('output') # specify the folder where the output files to be stored
@@ -115,7 +105,9 @@ PLATFORM_COLS = ['p_song_id', 'p_track', 'pc_track',
                  'refine_similarity', 'p_platform', 'p_album', 
                  'p_comments', 'p_company', 'p_release_date',
                  'p_likes_count', 'p_stream_count_1', 'p_stream_count_2', 'copyright_id'] 
+
 ##############################################################
+## Please don't change the following code!!!
 # generate the connection parameter for a platform, it returns the connection parameters when connect to the postgresql database
 def get_conn_params(platform):
     if platform not in PLATFORMS_DB_IN_SCOPE: 
