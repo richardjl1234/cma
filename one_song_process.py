@@ -254,7 +254,7 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
             # move the p_streams column right after the p_likes_count column
 
             temp_cols = list(matched_df.columns)
-            # print(temp_cols)
+            # print(1, temp_cols)
             temp_cols.remove('p_streams')
             temp_cols.remove('refine_process_comment')
             temp_cols.remove('refine_similarity')
@@ -264,7 +264,7 @@ def process_one_song(song_index, song_name, df_client_single_song_detail):
             temp_cols.append('refine_process_comment')
             temp_cols.append('refine_similarity')
             temp_cols.append('refine_platform_match')
-            # print(temp_cols)
+            # print(2, temp_cols)
             matched_df = matched_df.loc[:, temp_cols]
             
 
@@ -345,8 +345,8 @@ def customized_summary(series):
 def get_summary_from_platform_matched_df(temp_df):
     if temp_df.empty: return pd.DataFrame(columns = ['cc_track', 'cc_version'])
 
-    matched_df = temp_df.copy()
-    matched_df = matched_df.loc[:, ['cc_track',  'cc_version', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams', 'pc_version']]
+    matched_df = temp_df.copy().drop_duplicates()
+    # matched_df = matched_df.loc[:, ['cc_track',  'cc_version', 'p_platform', 'p_comments', 'p_likes_count', 'p_streams', 'pc_version', 'refine_platform_match']]
     logging.debug(f"{matched_df['p_likes_count'] = }")
 
     # add dummary row for each in-scope platform
@@ -364,16 +364,19 @@ def get_summary_from_platform_matched_df(temp_df):
 
     logging.info(f"{all_values_combination =}")
 
+    claimed_condition = (matched_df['pc_version'] == matched_df['cc_version'])  & (matched_df['refine_platform_match'] == 'Y') & (matched_df['refine_similarity'] == 1)
+    unclaimed_condition = claimed_condition.apply(lambda x: not x)
+
     # print(matched_df.columns)
     # CLAIMED MATCHES
-    matched_count_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'], 
+    matched_count_by_db = matched_df.loc[claimed_condition, 
                                          :].groupby(['cc_track', 'cc_version', 'p_platform']).size() # claimed match
     matched_count_by_db = matched_count_by_db.reindex(all_values_combination, fill_value = 0) ## TODO need to refinement
     matched_count_by_db.name = 'Claimed Matches'
     # print(matched_count_by_db)
 
     # UNCLAIMED MATCHES
-    unmatched_count_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'], 
+    unmatched_count_by_db = matched_df.loc[unclaimed_condition, 
                                            :].groupby(['cc_track', 'cc_version', 'p_platform']).size() # unclaimed match
 
     unmatched_count_by_db = unmatched_count_by_db.reindex(all_values_combination, fill_value = 0) # TODO need to refinement 
@@ -381,21 +384,21 @@ def get_summary_from_platform_matched_df(temp_df):
     # print(unmatched_count_by_db)
 
     # CLAIMED COMMENTS
-    claimed_comments_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
+    claimed_comments_by_db = matched_df.loc[claimed_condition,
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_comments'].agg(customized_summary)
                                            # claimed comments
     claimed_comments_by_db = claimed_comments_by_db.reindex(all_values_combination, fill_value = 0) 
     claimed_comments_by_db.name = 'Comments (Claimed)' 
 
     # UNCLAUMED COMMENTS
-    unclaimed_comments_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'],
+    unclaimed_comments_by_db = matched_df.loc[unclaimed_condition,
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_comments'].agg(customized_summary)
                                            # unclaimed comments
     unclaimed_comments_by_db = unclaimed_comments_by_db.reindex(all_values_combination, fill_value = 0)
     unclaimed_comments_by_db.name = 'Comments (Unclaimed)'
 
     # CLAIMED LIKES (Favorites)
-    claimed_likes_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
+    claimed_likes_by_db = matched_df.loc[claimed_condition,
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_likes_count'].agg(customized_summary)
                                            # claimed likes
     claimed_likes_by_db = claimed_likes_by_db.reindex(all_values_combination, fill_value = 0)
@@ -403,7 +406,7 @@ def get_summary_from_platform_matched_df(temp_df):
     logging.debug(f"{claimed_likes_by_db = }")
 
     # UNCLAIMED LIKES (Favorites)
-    unclaimed_likes_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'],
+    unclaimed_likes_by_db = matched_df.loc[unclaimed_condition,
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_likes_count'].agg(customized_summary)
                                            # unclaimed likes
     unclaimed_likes_by_db = unclaimed_likes_by_db.reindex(all_values_combination, fill_value = 0)
@@ -411,14 +414,14 @@ def get_summary_from_platform_matched_df(temp_df):
     logging.debug(f"{unclaimed_likes_by_db = }")
 
     # CLAIMED STREAMS
-    claimed_streams_by_db = matched_df.loc[matched_df['pc_version'] == matched_df['cc_version'],
+    claimed_streams_by_db = matched_df.loc[claimed_condition,
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_streams'].agg(customized_summary)
                                            # claimed streams
     claimed_streams_by_db = claimed_streams_by_db.reindex(all_values_combination, fill_value = 0)
     claimed_streams_by_db.name = 'Streams (Claimed)'
 
     # UNCLAIMED STREAMS
-    unclaimed_streams_by_db = matched_df.loc[matched_df['pc_version'] != matched_df['cc_version'],
+    unclaimed_streams_by_db = matched_df.loc[unclaimed_condition,
                                            :].groupby(['cc_track', 'cc_version', 'p_platform'])['p_streams'].agg(customized_summary)
                                            # unclaimed streams
     unclaimed_streams_by_db = unclaimed_streams_by_db.reindex(all_values_combination, fill_value = 0)
