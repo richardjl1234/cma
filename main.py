@@ -89,10 +89,13 @@ def create_final_details_client_df(df_matched_detail: pd.DataFrame, df_client_su
     df_output = pd.DataFrame()
     # df_output[('Catalog Metadata ', '#')] = df_matched_detail.index
     df_output[('Catalog Metadata ', 'Unique Song ID')] = df_input['Unique Song ID']
+    df_output[('Catalog Metadata ', 'Unique Version ID')] = df_input['Unique Version ID']
     df_output[('Catalog Metadata ', 'Reference Track')] = df_input['c_track']
     df_output[('Catalog Metadata ', 'Ref. Artist')] = df_input['c_artist']
+    df_output[('Catalog Metadata ', 'Album Name')] = df_input['c_album']
     # platform 
-    df_output[('Catalog Metadata ', 'Platform')] = df_input['p_platform'].map({'netease_max': 'NetEase', 'kugou': "Kugou", 'qqmusicv2': 'QQMusic'})
+    # df_output[('Catalog Metadata ', 'Platform')] = df_input['p_platform'].map({'netease_max': 'NetEase', 'kugou': "Kugou", 'qqmusicv2': 'QQMusic'})
+    df_output[('Catalog Metadata ', 'Platform')] = df_input['p_platform'].map(PLATFORM_NAME_MAPPING_DICT)
 
     # TODO how to remove those hardcoding
     # revenue
