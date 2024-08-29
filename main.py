@@ -122,7 +122,7 @@ def create_final_details_client_df(df_matched_detail: pd.DataFrame, df_client_su
     # claimed or not
     df_output[('Track Status', 'Claim Status ')] = df_input.apply(
         lambda row: 
-        'claimed' if row['pc_version'] == row['cc_version'] and row['refine_platform_match'] == 'Y'
+        'claimed' if row['pc_version'] == row['cc_version'] and row['refine_platform_match'] == 'Y' and row['refine_similarity'] == 1
         else 'unclaimed'
         ,axis=1)
 
@@ -303,7 +303,7 @@ def main():
        # save to detail and summary to internal sheets
        dfs_final_summary_internal.to_excel(writer, sheet_name='Catalogue overview (internal)', index=True)
 
-       dfs_final_details_internal.drop(columns=['c_platform'], inplace=True)
+    #    dfs_final_details_internal.drop(columns=['c_platform'], inplace=True)
        dfs_final_details_internal.to_excel(writer, sheet_name='All Matches (internal)', index=True)
     
     logging.info("📊 Matched summary and details are saved to Excel file {}. ".format(str(final_result_name)) )
